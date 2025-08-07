@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const businessController = require('../../controller/businessController');
 const multer = require('multer');
-const { authenticateBusiness } = require('../middleware/authenticateToken');
+const { authenticateBusiness } = require('../../Middleware/authenticationMiddleware');
 // Configurar el Multer para el manejo de las imagenes 
 const storage = multer.memoryStorage(); 
 const upload = multer({

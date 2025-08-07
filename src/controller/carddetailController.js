@@ -105,7 +105,12 @@ const deleteCardDetails = async(req, res) => {
 }
 
 const generateQR = async (req, res) => {
-  const { userId, businessId } = req.params;  // Recibimos los IDs de la ruta
+  const { userId, businessId } = req.params;
+  
+  if (!userId || !businessId) {
+    return res.status(400).json({ error: 'Faltan parámetros necesarios' });
+  }
+  
   try {
     const qrCode = await carddetailsProcess.generateQR(userId, businessId);
     res.status(200).json({ qrCode });
@@ -113,6 +118,7 @@ const generateQR = async (req, res) => {
     res.status(500).json({ error: 'Error al generar el QR' });
   }
 };
+
 
 module.exports = {
     getAllCardDetails,

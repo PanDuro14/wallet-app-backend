@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../../controller/userController');
-const { authenticateUser } = require('../middleware/authenticateToken');
+const { authenticateUser } = require('../../Middleware/authenticationMiddleware');
 // Rutas para las operaciones relacionadas con los usuarios
 router
   .get('/', userController.getAllUsers) // Obtener todos los usuarios
