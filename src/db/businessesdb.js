@@ -61,18 +61,18 @@ const getOneBusiness  = async (id) => {
 };
 
 // Crear nuevo negocio con contraseña cifrada
-const createBusiness = async (name, email, password, logoBuffer, strip_imageBuffer, created_at, updated_at) => {
+const createBusiness = async (name, email, password, logoBuffer, created_at, updated_at) => {
   return new Promise(async (resolve, reject) => {
     try {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
       const sql = `
         INSERT INTO businesses 
-          (name, email, password, logo, strip_image, created_at, updated_at) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7) 
+          (name, email, password, logo, created_at, updated_at) 
+        VALUES ($1, $2, $3, $4, $5, $6) 
         RETURNING *`;
       
-      pool.query(sql, [name, email, hashedPassword, logoBuffer, strip_imageBuffer, created_at, updated_at], (error, results) => {
+      pool.query(sql, [name, email, hashedPassword, logoBuffer, created_at, updated_at], (error, results) => {
         if (error) return reject(error);
         resolve(results.rows[0]); 
       });
@@ -83,14 +83,14 @@ const createBusiness = async (name, email, password, logoBuffer, strip_imageBuff
 };
 
 // Actualizar negocio por ID
-const updateBusiness = async (id, name, email, password, logoBuffer, strip_imageBuffer, created_at, updated_at) => {
+const updateBusiness = async (id, name, email, password, logoBuffer, created_at, updated_at) => {
   return new Promise((resolve, reject) => {
     try {
       const sql = `UPDATE businesses
-        SET name = $1, email = $2, password = $3, logo = $4, strip_image = $5, created_at = $6, updated_at = $7
-        WHERE id = $8`;
+        SET name = $1, email = $2, password = $3, logo = $4, created_at = $5, updated_at = $6
+        WHERE id = $7`;
       
-        pool.query(sql, [name, email, password, logoBuffer, strip_imageBuffer, created_at, updated_at, id], (error, results)); 
+        pool.query(sql, [name, email, password, logoBuffer, created_at, updated_at, id], (error, results)); 
         if (error) return reject(error); 
         resolve('Business actualizado'); 
     } catch (error) {

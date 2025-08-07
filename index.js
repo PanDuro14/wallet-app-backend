@@ -18,8 +18,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routing
-const v1Business = require('./src/routes/businessRoutes');
+const v1Business = require('./src/v1/routes/businessRoutes');
+const v1CardDetails = require('./src/v1/routes/cardDetailsRoutes'); 
+const v1Users = require('./src/v1/routes/usersRoutes'); 
 app.use('/api/v1/business', v1Business);
+app.use('/api/v1/cards', v1CardDetails); 
+app.use('/api/v1/users', v1Users); 
 
 // Ruta de prueba
 app.get('/', (req, res) => {

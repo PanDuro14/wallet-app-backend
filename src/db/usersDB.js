@@ -1,40 +1,26 @@
-const bcrypt = require('bcryptjs'); 
 const dbConnection = require('./dbConection'); 
 const dbLocal = require('./dbConectionLocal'); 
 
 let pool; 
+
 (async () => {
-    try {
-        await dbConnection.connect(); 
-        console.log('Conexión con la db remota exitosa: Usuarios'); 
-        pool = dbConnection; 
-    } catch (errRemota){
-        console.warn('Error con la db remota. Intentando conexión local... ', errRemota.message); 
+  try {
+    await dbConnection.connect(); 
+    console.log('Conexión con la db remota exitosa: Users'); 
+    pool = dbConnection; 
+  } catch (errRemota){
+    console.warn('Error con la db remota. Intentando conexión local... ', errRemota.message); 
 
     try {
-        await dbLocal.connect(); 
-        console.log('Conexión con la db local exitosa: Usuarios'); 
-        pool = dbLocal; 
+      await dbLocal.connect(); 
+      console.log('Conexión con la db local exitosa: Users'); 
+      pool = dbLocal; 
     } catch (errLocal){
-        console.error('Error al conectar con la db local: ', errLocal.message); 
+      console.error('Error al conectar con la db local: ', errLocal.message); 
     }
-    }
+  }
 })(); 
 
-// Login de usuario: con email y contraseña
-const login = async (email, password) => {
-    return new Promise((resolve, reject) => {
-        const sql = 'SELECT * FROM users WHERE email = $1'; 
-        pool.query(sql, [email], async (error, results) => {
-            if (error) return reject(error); 
-            if (results.rows.length === 0) return reject('Error: Usuario no encontrado'); 
-
-            const user = results.rows[0]; 
-            const isMatch = await bcrypt.compare(password, user.password); 
-            isMatch ? resolve(user) : reject('Contraseña incorrecta'); 
-        }); 
-    }); 
-}
 
 // Obtener todos los usuarios
 const getAllUsers = async () => {
@@ -45,16 +31,67 @@ const getAllUsers = async () => {
       resolve(results.rows);
     });
   });
-}
+};
 
-// Obtener usuario por ID
+// Obtener un usuario por ID
 const getOneUser = async (id) => {
   return new Promise((resolve, reject) => {
     const sql = 'SELECT * FROM users WHERE id = $1';
     pool.query(sql, [id], (error, results) => {
       if (error) return reject(error);
-      resolve(results.rows);
+      resolve(results.rows[0]);
     });
   });
-}
+};
 
+
+// Crear un nuevo usuario
+const createUser = async (name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      INSERT INTO users (name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`;
+    pool.query(sql, [name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url], (error, results) => {
+      if (error) return reject(error);
+      resolve(results.rows[0]);
+    });
+  });
+};
+
+// Actualizar un usuario
+const updateUser = async (id, name, email, phone, points, authentication_token, strip_image_url) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      UPDATE users SET 
+        name = $1, 
+        email = $2, 
+        phone = $3, 
+        points = $4, 
+        authentication_token = $5, 
+        strip_image_url = $6 
+      WHERE id = $7 RETURNING *`;
+    pool.query(sql, [name, email, phone, points, authentication_token, strip_image_url, id], (error, results) => {
+      if (error) return reject(error);
+      resolve(results.rows[0]);
+    });
+  });
+};
+
+// Eliminar un usuario
+const deleteUser = async (id) => {
+  return new Promise((resolve, reject) => {
+    const sql = 'DELETE FROM users WHERE id = $1';
+    pool.query(sql, [id], (error, results) => {
+      if (error) return reject(error);
+      resolve('Usuario eliminado');
+    });
+  });
+};
+
+module.exports = {
+  getAllUsers,
+  getOneUser,
+  createUser,
+  updateUser,
+  deleteUser,
+};

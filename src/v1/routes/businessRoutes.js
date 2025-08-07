@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const businessController = require('../controller/businessController');
+const businessController = require('../../controller/businessController');
 const multer = require('multer');
-
+const { authenticateBusiness } = require('../middleware/authenticateToken');
 // Configurar el Multer para el manejo de las imagenes 
 const storage = multer.memoryStorage(); 
 const upload = multer({
@@ -16,13 +16,11 @@ router
   .get('/', businessController.getAllBusinesses)
   .get('/:id', businessController.getOneBusiness)
   .post('/', upload.fields([
-    {name: 'logo', maxCount: 1}, 
-    {name: 'strip_image', maxCount: 1}
-  ]), businessController.createBusiness)
+    {name: 'logo', maxCount: 1}]), 
+    businessController.createBusiness)
   .put('/:id', upload.fields([
-    {name: 'logo', maxCount: 1}, 
-    {name: 'strip_image', maxCount: 1}
-  ]), businessController.updateBusiness)
+    {name: 'logo', maxCount: 1}]), 
+    businessController.updateBusiness)
   .delete('/:id', businessController.deleteBusiness)
 
 module.exports = router;
