@@ -1,5 +1,6 @@
 const dbConnection = require('./dbConection'); 
 const dbLocal = require('./dbConectionLocal'); 
+const { v4: uuidv4 } = require('uuid');
 
 let pool; 
 
@@ -46,11 +47,15 @@ const getOneUser = async (id) => {
 
 
 // Crear un nuevo usuario
-const createUser = async (name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url) => {
+const createUser = async (name, email, phone, business_id, points = 0, serial_number = null, authentication_token = null, strip_image_url = null) => {
+  // Generar UUID para 'serial_number' si no se pasa
+  serial_number = serial_number || uuidv4();
+
   return new Promise((resolve, reject) => {
     const sql = `
       INSERT INTO users (name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`;
+
     pool.query(sql, [name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url], (error, results) => {
       if (error) return reject(error);
       resolve(results.rows[0]);

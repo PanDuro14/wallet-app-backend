@@ -26,9 +26,9 @@ const getOneUser = async (req, res) => {
 
 // Crear un nuevo usuario
 const createUser = async (req, res) => {
-  const { name, email, phone, business_id } = req.body;
+  const { name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url } = req.body;
   try {
-    const newUser = await userProcess.createUser(name, email, phone, business_id);
+    const newUser = await userProcess.createUser(name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url);
     res.status(201).json({ message: 'Usuario creado con éxito', newUser });
   } catch (error) {
     res.status(500).json({ error: 'Error al crear el usuario', details: error.message });
