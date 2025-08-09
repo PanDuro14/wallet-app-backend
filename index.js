@@ -6,10 +6,10 @@ const app = express();
 
 // Configuración CORS
 const corsOptions = {
-  origin: '*', //['http://localhost:8100'] para futuro front
+  origin: ['http://localhost:4200', 'http://localhost:8100'],
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: false, 
+  credentials: true, 
   optionsSuccessStatus: 200
 };
 

@@ -12,6 +12,7 @@ const upload = multer({
 
 // Rutas para las operaciones relacionadas con los negocios
 router
+  .post('/getemail', businessController.getEmail)
   .post('/loginBusiness', businessController.loginBusiness)
   .get('/', businessController.getAllBusinesses)
   .get('/:id', businessController.getOneBusiness)

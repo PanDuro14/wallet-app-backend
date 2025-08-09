@@ -63,6 +63,12 @@ const deleteBusiness = async (id) => {
   }
 };
 
+// getEmail 
+const getEmail = async (email) => {
+  const result = await businessService.getEmail(email); 
+  return result; 
+}
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -70,4 +76,5 @@ module.exports = {
   createBusiness,
   updateBusiness,
   deleteBusiness,
+  getEmail
 };

@@ -111,6 +111,21 @@ const deleteBusiness = async (req, res) => {
   }
 };
 
+// getEmail 
+const getEmail = async (req, res) => {
+  const { email } = req.body; 
+  try {
+    if(!email){
+      res.status(404).json({ error: 'Email no econtrado'}); 
+    } else {
+      const gettedEmail = await businessesProcess.getEmail(email); 
+      res.status(200).json(gettedEmail); 
+    }
+  } catch (error) {
+    res.status(502).json({ error: 'Error al obtener un email'}); 
+  }
+}
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -118,4 +133,5 @@ module.exports = {
   createBusiness,
   updateBusiness,
   deleteBusiness,
+  getEmail
 };

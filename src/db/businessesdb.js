@@ -110,6 +110,17 @@ const deleteBusiness = async (id) => {
   });
 };
 
+// getEmailByEmail 
+const getEmail = async (email) => {
+  return new Promise((resolve, reject) => {
+    const sql = 'SELECT name, email FROM businesses WHERE email = $1'; 
+    pool.query(sql, [email], (error, results) => {
+      if(error) return reject(error); 
+      resolve(results.rows[0]); 
+    });
+  }); 
+}
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -117,4 +128,5 @@ module.exports = {
   createBusiness,
   updateBusiness,
   deleteBusiness,
+  getEmail,
 };
