@@ -38,7 +38,7 @@ const createUser = async (req, res) => {
 // Actualizar un usuario
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phone, points, authentication_token, strip_image_url } = req.body;
+  const { name, email, phone, authentication_token, strip_image_url } = req.body;
   try {
     const updatedUser = await userProcess.updateUser(id, name, email, phone, points, authentication_token, strip_image_url);
     if (!updatedUser) {

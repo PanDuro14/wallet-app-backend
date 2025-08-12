@@ -16,7 +16,7 @@ const createUser = async(name, email, phone, points, authentication_token, strip
 }
 
 const updateUser = async(id) => {
-    const users = usersDb.updateUser(name, email, phone, points, authentication_token, strip_image_url, id); 
+    const users = usersDb.updateUser(name, email, phone, authentication_token, strip_image_url, id); 
     return users; 
 }
 

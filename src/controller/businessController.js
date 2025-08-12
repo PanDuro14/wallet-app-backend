@@ -4,11 +4,11 @@ const businessesProcess = require('../processes/businessProcess');
 const loginBusiness = async (req, res) => {
   const { email, password } = req.body;
   try {
-    const business = await businessesProcess.loginBusiness(email, password);
+    const data = await businessesProcess.loginBusiness(email, password);
 
-    if (business) {
+    if (data) {
       // Generar el token para el negocio
-      const token = jwt.sign({ businessId: business.id, name: business.name, email: business.email }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      const token = jwt.sign({ businessId: data.id, name: data.name, email: data.email }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
       // Guardar el token en las cookies para permitir la persistencia de sesión
       res.cookie('token', token, {
@@ -17,7 +17,7 @@ const loginBusiness = async (req, res) => {
         maxAge: 3600000,  // 1 hora de expiración
       });
 
-      res.status(200).json({ success: true, token, business });
+      res.status(200).json({ success: true, token, data });
     } else {
       res.status(401).json({ success: false, message: 'Credenciales incorrectas' });
     }
@@ -57,12 +57,7 @@ const createBusiness = async (req, res) => {
     const { name, email, password,  created_at, updated_at } = req.body; 
     const logoBuffer = req.files['logo'] ? req.files['logo'][0].buffer : null;
     //const stripImageBuffer = req.files['strip_image'] ? req.files['strip_image'][0].buffer : null;
-
-    if (!logoBuffer ) {
-      console.log(req.files); 
-      return res.status(400).json({ error: 'Se requieren las imágenes del logo y strip' });
-    }
-    
+ 
     const business = await businessesProcess.createBusiness(name, email, password, logoBuffer, created_at, updated_at); 
 
     res.status(201).json({ message: 'Negocio creado con éxito', business });
@@ -84,13 +79,13 @@ const updateBusiness = async (req, res) => {
       return res.status(400).json({ error: 'Se requieren las imágenes del logo y strip' });
     }
 
-    const business = await businessesProcess.updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at)
+    const data = await businessesProcess.updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at)
   
-    if (!business) {
+    if (!data) {
       return res.status(404).json({ error: 'Negocio no encontrado' });
     }
 
-    res.status(200).json({ message: 'Negocio actualizado con éxito', business });
+    res.status(200).json({ message: 'Negocio actualizado con éxito', data });
   } catch (error) {
     console.error('Error al update el negocio:', error); 
     res.status(502).json({ error: 'Error al actualizar el negocio', details: error.message });

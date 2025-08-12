@@ -25,10 +25,21 @@ const deleteCardDetails = async (id) => {
     return cardDetail; 
 }
 
+const getAllCardsByBusiness = async(business_id) =>{
+    const cardDetail = await cardDetailDb.getAllCardsByBusiness(business_id); 
+    return cardDetail; 
+}
+const getOneCardByBusiness = async(business_id, id) => {
+    const cardDetail = await cardDetailDb.getOneCardByBusiness(business_id, id); 
+    return cardDetail; 
+}
+
 module.exports = {
     getAllCardDetails,
     getOneCardDetails,
     createOneCardDetails,
     updateCardDetails, 
-    deleteCardDetails
+    deleteCardDetails, 
+    getAllCardsByBusiness, 
+    getOneCardByBusiness
 }

@@ -64,14 +64,13 @@ const createUser = async (name, email, phone, business_id, points = 0, serial_nu
 };
 
 // Actualizar un usuario
-const updateUser = async (id, name, email, phone, points, authentication_token, strip_image_url) => {
+const updateUser = async (id, name, email, phone, authentication_token, strip_image_url) => {
   return new Promise((resolve, reject) => {
     const sql = `
       UPDATE users SET 
         name = $1, 
         email = $2, 
         phone = $3, 
-        points = $4, 
         authentication_token = $5, 
         strip_image_url = $6 
       WHERE id = $7 RETURNING *`;

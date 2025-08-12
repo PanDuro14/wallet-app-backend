@@ -36,7 +36,7 @@ const createOneCardDetails = async(req, res) => {
         const logoBuffer = req.files['logo'] ? req.files['logo'][0].buffer : null;
         const strip_imageBuffer = req.files['strip_image'] ? req.files['strip_image'][0].buffer : null;
 
-        if(!business_id || !background_color || !foreground_color || !pass_type_id || !terms || !created_at || !updated_at){
+        if(!business_id || !background_color || !foreground_color || !pass_type_id || !terms /*|| !created_at || !updated_at*/){
             res.status(400).json({ error: 'Datos faltantes'}); 
         }
 
@@ -74,7 +74,7 @@ const updateCardDetails = async(req, res) => {
         const logoBuffer = req.files['logo'] ? req.files['logo'][0].buffer : null;
         const strip_imageBuffer = req.files['strip_image'] ? req.files['strip_image'][0].buffer : null;
 
-        const updatedCardDetails = await carddetailProcess.updateCardDetails(
+        const updatedCardDetails = await carddetailsProcess.updateCardDetails(
             business_id, background_color, foreground_color, pass_type_id, terms,
             logoBuffer, strip_imageBuffer, created_at, updated_at, id
         );
@@ -104,6 +104,46 @@ const deleteCardDetails = async(req, res) => {
     }
 }
 
+const getAllCardsByBusiness = async(req, res) => {
+    try {
+        const { business_id } = req.params; 
+        if(!business_id){
+            return res.status(400).json({ error: 'business_id faltante'}); 
+        }
+
+        const result = await carddetailProcess.getAllCardsByBusiness(business_id); 
+        if(!result){
+            return res.status(404).json({ error: 'Tarjetas no encontradas'}); 
+        }
+        res.status(200).json(result); 
+    } catch (error){
+        console.error(error); 
+        res.status(502).json({ error: 'Error al obtener las tarjeas'}); 
+    }
+}
+
+const getOneCardByBusiness = async(req, res) => {
+    try {
+        const { business_id, id } = req.params; 
+        if(!business_id){
+            return res.status(400).json({ error: 'business_id faltante'}); 
+        }
+
+        if(!id){
+            return res.status(400).json({ error: 'id faltante'}); 
+        }
+        const result = await carddetailProcess.getOneCardByBusiness(business_id, id); 
+        
+        if(!result){
+            return res.status(404).json({ error: 'Tarjeta no encontrada'}); 
+        }
+        res.status(200).json(result); 
+    } catch (error){
+        console.error(error); 
+        res.status(502).json({ error: 'Error al obtener la tarjea'}); 
+    }
+}
+
 const generateQR = async (req, res) => {
   const { userId, businessId } = req.params;
   
@@ -126,5 +166,7 @@ module.exports = {
     createOneCardDetails,
     updateCardDetails, 
     deleteCardDetails, 
+    getAllCardsByBusiness, 
+    getOneCardByBusiness,
     generateQR
 }

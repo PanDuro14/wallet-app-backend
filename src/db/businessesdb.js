@@ -25,7 +25,7 @@ let pool;
 // Login de businesses
 const loginBusiness = async (email, password) => {
     return new Promise((resolve, reject) => {
-        const sql = 'SELECT * FROM businesses WHERE email = $1'; 
+        const sql = 'SELECT  id, name, email, password  FROM businesses WHERE email = $1'; 
         pool.query(sql, [email], async (error, results) => {
             if (error) return reject(error); 
             if (results.rows.length === 0) return reject('Error: Usuario no encontrado');

@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-
+const morgan = require('morgan');
 const app = express();
 
 // Configuración CORS
@@ -16,14 +16,17 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(morgan('dev'));
 
 // Routing
 const v1Business = require('./src/v1/routes/businessRoutes');
 const v1CardDetails = require('./src/v1/routes/cardDetailsRoutes'); 
 const v1Users = require('./src/v1/routes/usersRoutes'); 
+const v1Wallets = require('./src/v1/routes/walletRoutes'); 
 app.use('/api/v1/business', v1Business);
 app.use('/api/v1/cards', v1CardDetails); 
 app.use('/api/v1/users', v1Users); 
+app.use('/api/v1/wallets', v1Wallets); 
 
 // Ruta de prueba
 app.get('/', (req, res) => {

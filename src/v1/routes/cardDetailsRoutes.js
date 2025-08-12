@@ -11,6 +11,8 @@ const upload = multer({
 }); 
 
 router
+    .get('/getByBusiness/:business_id', carddetailController.getAllCardsByBusiness)
+    .get('/getOneByBusiness/:business_id/:id', carddetailController.getOneCardByBusiness)
     .get('/generate/:userId/:businessId', carddetailController.generateQR)
     .get('/', carddetailController.getAllCardDetails)
     .get('/:id', carddetailController.getOneCardDetails)

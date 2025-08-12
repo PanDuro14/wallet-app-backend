@@ -26,6 +26,15 @@ const deleteCardDetails = async (id) => {
     return cardDetail; 
 }
 
+const getAllCardsByBusiness = async(business_id) =>{
+    const cardDetail = await cardDetalService.getAllCardsByBusiness(business_id); 
+    return cardDetail; 
+}
+const getOneCardByBusiness = async(business_id, id) => {
+    const cardDetail = await cardDetalService.getOneCardByBusiness(business_id, id); 
+    return cardDetail; 
+}
+
 const generateQR = async (userId, businessId) => {
   const url = `https://mywalletapp.com/qr/${userId}/${businessId}`;  // Este URL debe llevar a la ruta de redirección en la app móvil o en la web.
   try {
@@ -43,5 +52,7 @@ module.exports = {
     createOneCardDetails,
     updateCardDetails, 
     deleteCardDetails, 
+    getAllCardsByBusiness, 
+    getOneCardByBusiness,
     generateQR
 }

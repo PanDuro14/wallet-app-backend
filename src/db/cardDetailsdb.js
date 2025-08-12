@@ -91,6 +91,27 @@ const deleteCardDetails = async (id) => {
 }
 
 
+// Obtener todas las tarjetas de acuerdo al id del negocio
+const getAllCardsByBusiness = async (business_id) => {
+    return new Promise(async (resolve, reject) => {
+        const sql = 'SELECT * FROM card_details WHERE business_id = $1'; 
+        pool.query(sql, [business_id], (error, results) => {
+            if(error) return reject(error); 
+            resolve(results.rows); 
+        }); 
+    }); 
+}
+
+const getOneCardByBusiness = async (business_id, id) => {
+    return new Promise (async (resolve, reject) => {
+        const sql = 'SELECT * FROM card_details WHERE business_id = $1 AND id = $2'; 
+        pool.query(sql, [business_id, id], (error, results) => {
+            if(error) return reject(error); 
+            resolve(results.rows); 
+        }); 
+    }); 
+}
+
 
 
 module.exports = {
@@ -98,5 +119,7 @@ module.exports = {
     getOneCardDetails,
     createOneCardDetails,
     updateCardDetails, 
-    deleteCardDetails
+    deleteCardDetails, 
+    getAllCardsByBusiness, 
+    getOneCardByBusiness
 }
