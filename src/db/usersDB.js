@@ -47,16 +47,14 @@ const getOneUser = async (id) => {
 
 
 // Crear un nuevo usuario
-const createUser = async (name, email, phone, business_id, points = 0, serial_number = null, authentication_token = null, strip_image_url = null) => {
-  // Generar UUID para 'serial_number' si no se pasa
+const createUser = async (name, email, phone, business_id, points = 0, serial_number = null) => {
   serial_number = serial_number || uuidv4();
-
   return new Promise((resolve, reject) => {
     const sql = `
-      INSERT INTO users (name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`;
-
-    pool.query(sql, [name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url], (error, results) => {
+      INSERT INTO users (name, email, phone, business_id, points, serial_number)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *`;
+    pool.query(sql, [name, email, phone, business_id, points, serial_number], (error, results) => {
       if (error) return reject(error);
       resolve(results.rows[0]);
     });
@@ -64,17 +62,17 @@ const createUser = async (name, email, phone, business_id, points = 0, serial_nu
 };
 
 // Actualizar un usuario
-const updateUser = async (id, name, email, phone, authentication_token, strip_image_url) => {
+const updateUser = async (id, name, email, phone) => {
   return new Promise((resolve, reject) => {
     const sql = `
-      UPDATE users SET 
-        name = $1, 
-        email = $2, 
-        phone = $3, 
-        authentication_token = $5, 
-        strip_image_url = $6 
-      WHERE id = $7 RETURNING *`;
-    pool.query(sql, [name, email, phone, points, authentication_token, strip_image_url, id], (error, results) => {
+      UPDATE users SET
+        name = $1,
+        email = $2,
+        phone = $3,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+      RETURNING *`;
+    pool.query(sql, [name, email, phone, id], (error, results) => {
       if (error) return reject(error);
       resolve(results.rows[0]);
     });
@@ -85,12 +83,40 @@ const updateUser = async (id, name, email, phone, authentication_token, strip_im
 const deleteUser = async (id) => {
   return new Promise((resolve, reject) => {
     const sql = 'DELETE FROM users WHERE id = $1';
-    pool.query(sql, [id], (error, results) => {
+    pool.query(sql, [id], (error) => {
       if (error) return reject(error);
       resolve('Usuario eliminado');
     });
   });
 };
+
+
+// db/usersDB.js
+const saveUserWallet = async ({ userId, loyalty_account_id, wallet_url }) => {
+  const sql = `
+    UPDATE users SET
+      loyalty_account_id = $1,
+      wallet_url = $2,
+      updated_at = NOW()
+    WHERE id = $3
+    RETURNING *`;
+  const params = [loyalty_account_id, wallet_url, userId];
+  const { rows } = await pool.query(sql, params);
+  return rows[0];
+};
+
+const markWalletAdded = async ({ userId }) => {
+  const sql = `
+    UPDATE users SET
+      wallet_added = TRUE,
+      wallet_added_at = NOW(),
+      updated_at = NOW()
+    WHERE id = $1
+    RETURNING *`;
+  const { rows } = await pool.query(sql, [userId]);
+  return rows[0];
+};
+
 
 module.exports = {
   getAllUsers,
@@ -98,4 +124,6 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  saveUserWallet, 
+  markWalletAdded
 };

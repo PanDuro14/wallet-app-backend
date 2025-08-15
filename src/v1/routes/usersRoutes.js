@@ -8,6 +8,8 @@ router
   .get('/:id', userController.getOneUser) // Obtener un usuario por ID
   .post('/', userController.createUser) // Crear un nuevo usuario
   .put('/:id', userController.updateUser) // Actualizar un usuario
-  .delete('/:id', userController.deleteUser); // Eliminar un usuario
+  .delete('/:id', userController.deleteUser) // Eliminar un usuario
+  .post('/users/:id/wallet', userController.retryWallet);// reintento de wallet (opcional)
+
 
 module.exports = router;

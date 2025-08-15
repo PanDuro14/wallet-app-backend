@@ -1,34 +1,39 @@
-const usersDb = require('../db/usersDB'); 
+const usersDb = require('../db/usersDB');
 
-const getAllUsers = async() => {
-    const users = usersDb.getAllUsers(); 
-    return users; 
-}
+const getAllUsers = async () => {
+  return usersDb.getAllUsers();
+};
 
-const getOneUser = async(id) => {
-    const users = usersDb.getOneUser(id); 
-    return users; 
-}
+const getOneUser = async (id) => {
+  return usersDb.getOneUser(id);
+};
 
-const createUser = async(name, email, phone, points, authentication_token, strip_image_url) => {
-    const users = usersDb.createUser(name, email, phone, points, authentication_token, strip_image_url); 
-    return users; 
-}
+const createUser = async (name, email, phone, business_id, points = 0, serial_number = null) => {
+  return usersDb.createUser(name, email, phone, business_id, points, serial_number);
+};
 
-const updateUser = async(id) => {
-    const users = usersDb.updateUser(name, email, phone, authentication_token, strip_image_url, id); 
-    return users; 
-}
+const updateUser = async (id, name, email, phone) => {
+  return usersDb.updateUser(id, name, email, phone);
+};
 
-const deleteUser = async(id) => {
-    const users = usersDb.deleteUser(name, email, phone, points, authentication_token, strip_image_url, id); 
-    return users; 
-}
+const deleteUser = async (id) => {
+  return usersDb.deleteUser(id);
+};
+
+const saveUserWallet = async ({ userId, loyalty_account_id, wallet_url }) => {
+  return usersDb.saveUserWallet({ userId, loyalty_account_id, wallet_url });
+};
+
+const markWalletAdded = async ({ userId }) => {
+  return usersDb.markWalletAdded({ userId });
+};
 
 module.exports = {
-    getAllUsers,
-    getOneUser,
-    createUser,
-    updateUser,
-    deleteUser,
+  getAllUsers,
+  getOneUser,
+  createUser,
+  updateUser,
+  deleteUser,
+  saveUserWallet,
+  markWalletAdded
 };

@@ -1,6 +1,6 @@
 // src/processes/walletProcess.js
 const carddetailsProcess = require('./carddetailsProcess'); 
-const { buildAddToGoogleWalletURL } = require('../services/googleWalletService');
+const { buildAddToGoogleWalletURL, ensureLoyaltyClass } = require('../services/googleWalletService');
 const { createPkPassBuffer } = require('../services/appleWalletService');
 
 async function issueGoogleWalletLink({ cardCode, userName, programName, businessId }) {
@@ -11,6 +11,14 @@ async function issueGoogleWalletLink({ cardCode, userName, programName, business
     fg: cd?.foreground_color || '#000000',
     logoUri: cd?.logo_url || null
   };
+
+  await ensureLoyaltyClass({
+    businessId,
+    programName: brand.programName,
+    hexBackgroundColor: brand.bg,
+    logoUri: brand.logoUri
+  });
+
   return buildAddToGoogleWalletURL({ cardCode, userName, brand, businessId });
 }
 

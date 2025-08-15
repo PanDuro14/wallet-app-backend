@@ -1,34 +1,91 @@
-const userService = require('../services/usersService'); 
 
-const getAllUsers = async() => {
-    const users = userService.getAllUsers(); 
-    return users; 
+const userService = require('../services/usersService');
+const { issueGoogleWalletLink } = require('./walletProcess'); // asegúrate de la ruta real
+
+function buildCardCode({ business_id, serial_number, id }) {
+  const short = (serial_number || '').toString().split('-')[0];
+  return `CARD-${business_id}-${(short || String(id)).toUpperCase()}`;
 }
 
-const getOneUser = async(id) => {
-    const users = userService.getOneUser(id); 
-    return users; 
-}
+const getAllUsers = async () => {
+  return userService.getAllUsers();
+};
 
-const createUser = async(name, email, phone, points, authentication_token, strip_image_url) => {
-    const users = userService.createUser(name, email, phone, points, authentication_token, strip_image_url); 
-    return users; 
-}
+const getOneUser = async (id) => {
+  return userService.getOneUser(id);
+};
 
-const updateUser = async(id) => {
-    const users = userService.updateUser(name, email, phone, authentication_token, strip_image_url, id); 
-    return users; 
-}
+const createUser = async (name, email, phone, business_id, points = 0, serial_number = null) => {
+  // 1) crear usuario
+  const newUser = await userService.createUser(name, email, phone, business_id, points, serial_number);
 
-const deleteUser = async(id) => {
-    const users = userService.deleteUser(name, email, phone, points, authentication_token, strip_image_url, id); 
-    return users; 
-}
+  // 2) generar cardCode
+  const cardCode = buildCardCode({
+    business_id: newUser.business_id,
+    serial_number: newUser.serial_number,
+    id: newUser.id
+  });
+
+  // 3) pedir URL de Google Wallet
+  try {
+    const { url } = await issueGoogleWalletLink({
+      cardCode,
+      userName: newUser.name,
+      programName: 'Mi Programa',
+      businessId: newUser.business_id
+    });
+
+    // 4) guardar en DB
+    const updated = await userService.saveUserWallet({
+      userId: newUser.id,
+      loyalty_account_id: cardCode,
+      wallet_url: url
+    });
+
+    return { user: updated, walletUrl: url };
+  } catch (err) {
+    // no rompas el alta si falla Wallet: guarda loyalty y deja url nula
+    await userService.saveUserWallet({
+      userId: newUser.id,
+      loyalty_account_id: cardCode,
+      wallet_url: null
+    });
+    return { user: newUser, walletUrl: null, walletStatus: 'PENDING', error: err?.message };
+  }
+};
+
+const updateUser = async (id, name, email, phone) => {
+  return userService.updateUser(id, name, email, phone);
+};
+
+const deleteUser = async (id) => {
+  return userService.deleteUser(id);
+};
+
+// opcional: reintentar wallet luego
+const regenerateWallet = async (userId) => {
+  const user = await userService.getOneUser(userId);
+  if (!user) throw new Error('Usuario no encontrado');
+  const cardCode = buildCardCode(user);
+  const { url } = await issueGoogleWalletLink({
+    cardCode,
+    userName: user.name,
+    programName: 'Mi Programa',
+    businessId: user.business_id
+  });
+  const updated = await userService.saveUserWallet({
+    userId: user.id,
+    loyalty_account_id: cardCode,
+    wallet_url: url
+  });
+  return { walletUrl: url, user: updated };
+};
 
 module.exports = {
-    getAllUsers,
-    getOneUser,
-    createUser,
-    updateUser,
-    deleteUser,
+  getAllUsers,
+  getOneUser,
+  createUser,
+  updateUser,
+  deleteUser,
+  regenerateWallet
 };

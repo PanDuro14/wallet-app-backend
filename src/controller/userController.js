@@ -15,21 +15,19 @@ const getOneUser = async (req, res) => {
   const { id } = req.params;
   try {
     const user = await userProcess.getOneUser(id);
-    if (!user) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ error: `Error al obtener el usuario con ID ${id}` });
   }
 };
 
-// Crear un nuevo usuario
+// Crear un nuevo usuario (sin auth_token ni strip_image_url)
 const createUser = async (req, res) => {
-  const { name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url } = req.body;
+  const { name, email, phone, business_id, points, serial_number } = req.body;
   try {
-    const newUser = await userProcess.createUser(name, email, phone, business_id, points, serial_number, authentication_token, strip_image_url);
-    res.status(201).json({ message: 'Usuario creado con éxito', newUser });
+    const result = await userProcess.createUser(name, email, phone, business_id, points, serial_number);
+    res.status(201).json({ message: 'Usuario creado con éxito', ...result });
   } catch (error) {
     res.status(500).json({ error: 'Error al crear el usuario', details: error.message });
   }
@@ -38,12 +36,10 @@ const createUser = async (req, res) => {
 // Actualizar un usuario
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phone, authentication_token, strip_image_url } = req.body;
+  const { name, email, phone } = req.body;
   try {
-    const updatedUser = await userProcess.updateUser(id, name, email, phone, points, authentication_token, strip_image_url);
-    if (!updatedUser) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    const updatedUser = await userProcess.updateUser(id, name, email, phone);
+    if (!updatedUser) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.status(200).json({ message: 'Usuario actualizado con éxito', updatedUser });
   } catch (error) {
     res.status(500).json({ error: 'Error al actualizar el usuario', details: error.message });
@@ -55,12 +51,21 @@ const deleteUser = async (req, res) => {
   const { id } = req.params;
   try {
     const result = await userProcess.deleteUser(id);
-    if (!result) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    if (!result) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.status(200).json({ message: 'Usuario eliminado con éxito' });
   } catch (error) {
     res.status(500).json({ error: 'Error al eliminar el usuario' });
+  }
+};
+
+// Opcional: reintentar generar wallet
+const retryWallet = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await userProcess.regenerateWallet(Number(id));
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo regenerar la wallet', details: error.message });
   }
 };
 
@@ -70,4 +75,5 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  retryWallet
 };

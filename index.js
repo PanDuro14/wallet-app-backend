@@ -6,7 +6,7 @@ const app = express();
 
 // Configuración CORS
 const corsOptions = {
-  origin: ['http://localhost:4200', 'http://localhost:8100'],
+  origin: ['http://localhost:4200', 'http://localhost:8100', 'https://2hlw0cdc-4200.usw3.devtunnels.ms', '*'],
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true, 
@@ -32,6 +32,7 @@ app.use('/api/v1/wallets', v1Wallets);
 app.get('/', (req, res) => {
   res.send(`Servidor escuchando en: ${PORT}`);
 });
+
 
 // Puerto
 const PORT = process.env.PORT || 8080;
