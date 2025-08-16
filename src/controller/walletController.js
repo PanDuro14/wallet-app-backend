@@ -19,23 +19,32 @@ async function createGoogle(req, res) {
   }
 }
 
+// controller/walletController.js
 async function addToAppleWallet(req, res) {
+  const WALLET_ENABLED = (process.env.WALLET_ENABLED === 'true');
   if (!WALLET_ENABLED) return res.status(501).json({ error: 'Wallet deshabilitado (WALLET_ENABLED=false)' });
-  try {
-    const { cardCode, userName, programName, businessId } = req.body || {};
-    if (!cardCode || !businessId) return res.status(400).json({ error: 'cardCode y businessId son requeridos.' });
 
-    const pkpassBuffer = await issueAppleWalletPkpass({ cardCode, userName, programName, businessId });
+  try {
+    const { cardCode, userName, programName, businessId, colors, fields, barcode, points } = req.body || {};
+    if (!cardCode || !businessId)
+      return res.status(400).json({ error: 'cardCode y businessId son requeridos.' });
+
+    const pkpassBuffer = await issueAppleWalletPkpass({
+      cardCode, userName, programName, businessId, colors, fields, barcode, points
+    });
+
     res.set({
       'Content-Type': 'application/vnd.apple.pkpass',
       'Content-Disposition': `attachment; filename="${cardCode}.pkpass"`
     });
     return res.send(pkpassBuffer);
-  } catch (err) {
-    console.error('[Apple Wallet] create error:', err?.message);
+  } catch (e) {
+    console.error('[Apple Wallet] create error:', e?.message || e);
     return res.status(500).json({ error: 'No se pudo generar el .pkpass' });
   }
 }
+
+
 
 // SOLO DEV: inspección del JWT (sin pasar por process)
 async function debugGoogle(req, res) {

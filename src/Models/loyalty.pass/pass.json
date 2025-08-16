@@ -1,0 +1,51 @@
+{
+	"formatVersion": 1,
+	"passTypeIdentifier": "pass.mx.windoe.loyalty",
+	"serialNumber": "TEMPLATE_SN",
+	"teamIdentifier": "73U3X2982C",
+	"webServiceURL": "https://loyalty-rvd8.onrender.com/api",
+	"authenticationToken": "a1b2c3d4e5f6g7h8i9",
+	"organizationName": "Windoe",
+	"description": "Windoe Loyalty Card",
+	"foregroundColor": "rgb(140, 140, 140)",
+	"backgroundColor": "rgb(45, 52, 54)",
+	"labelColor": "rgb(200, 200, 200)",
+	"storeCard": {
+		"headerFields": [],
+		"primaryFields": [
+			
+			{
+				"key": "points",
+				"label": "POINTS",
+				"value": "0",
+				"textAlignment": "PKTextAlignmentCenter"
+			}
+		],
+		"secondaryFields": [
+			{
+				"key": "name",
+				"label": "MEMBER",
+				"value": "Member Name Placeholder"
+			}
+		],
+		"auxiliaryFields": [],
+		"backFields": [
+			{
+				"key": "info",
+				"label": "Information",
+				"value": "Welcome to the Windoe loyalty program!"
+			},
+			{
+				"key": "email",
+				"label": "Registered Email",
+				"value": "email@example.com"
+			},
+			{
+				"key": "terms",
+				"label": "Terms & Conditions",
+				"value": "Points cannot be redeemed for cash. Windoe reserves the right to modify program terms at any time."
+			}
+		]
+	}
+	
+}

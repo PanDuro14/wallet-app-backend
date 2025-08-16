@@ -32,6 +32,7 @@
     "passkit-generator": "^3.4.0",
     "pg": "^8.16.3",
     "qrcode": "^1.5.4",
+    "sharp": "^0.34.3",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

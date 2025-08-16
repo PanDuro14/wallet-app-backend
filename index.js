@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const app = express();
+const path = require('path');   
 
 // Configuración CORS
 const corsOptions = {
@@ -17,6 +18,13 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+
+// Puerto
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Servidor escuchando en: ${PORT}`);
+});
+
 
 // Routing
 const v1Business = require('./src/v1/routes/businessRoutes');
@@ -34,8 +42,7 @@ app.get('/', (req, res) => {
 });
 
 
-// Puerto
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Servidor escuchando en: ${PORT}`);
-});
+app.use('/public', express.static(path.join(process.cwd(), 'public'), {
+  maxAge: '7d', etag: true, immutable: false
+}));
+
