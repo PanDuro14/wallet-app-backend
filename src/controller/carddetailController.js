@@ -54,7 +54,7 @@ const createOneCardDetails = async(req, res) => {
             res.status(400).json({ error: 'Datos inválidos'}); 
         }
     } catch (error){
-        res.status(502).json({ error: 'Error al '}); 
+        res.status(502).json({ error: 'Error al crear un cardDetail '}); 
     }
 }
 

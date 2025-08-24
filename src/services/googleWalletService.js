@@ -10,23 +10,27 @@ const DEFAULT_ISSUER_NAME = process.env.GOOGLE_ISSUER_NAME || 'Mi Negocio';
 const origins = (process.env.GOOGLE_WALLET_ORIGINS || 'http://localhost:4200')
   .split(',').map(s => s.trim()).filter(Boolean);
 
-const SERVICE_ACCOUNT_PATH = process.env.GOOGLE_SERVICE_ACCOUNT_PATH || '';
+//const SERVICE_ACCOUNT_PATH = process.env.GOOGLE_SERVICE_ACCOUNT_PATH || '';
 const SA_JSON_BASE64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 || '';
-const SA_JSON_INLINE = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
+//const SA_JSON_INLINE = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
 
 /* ====================== Helpers base ====================== */
 let sa;
 function getSA() {
   if (sa) return sa;
-  if (SA_JSON_INLINE || SA_JSON_BASE64) {
-    const raw = SA_JSON_INLINE || Buffer.from(SA_JSON_BASE64, 'base64').toString('utf8');
-    sa = JSON.parse(raw);
-    return sa;
+  if (!SA_JSON_BASE64) throw new Error('Falta GOOGLE_SERVICE_ACCOUNT_JSON_BASE64');
+
+  const raw = Buffer.from(SA_JSON_BASE64, 'base64').toString('utf8');
+  sa = JSON.parse(raw);
+
+  // Reparar saltos de línea por si vinieron escapados
+  if (typeof sa.private_key === 'string') {
+    sa.private_key = sa.private_key.replace(/\\n/g, '\n');
   }
-  if (!SERVICE_ACCOUNT_PATH) throw new Error('Falta credencial: GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 o GOOGLE_SERVICE_ACCOUNT_PATH');
-  const abs = path.isAbsolute(SERVICE_ACCOUNT_PATH) ? SERVICE_ACCOUNT_PATH : path.resolve(process.cwd(), SERVICE_ACCOUNT_PATH);
-  if (!fs.existsSync(abs)) throw new Error(`No existe el archivo de Service Account en: ${abs}`);
-  sa = JSON.parse(fs.readFileSync(abs, 'utf8'));
+
+  if (!sa.client_email || !sa.private_key) {
+    throw new Error('Service Account inválida: faltan client_email o private_key');
+  }
   return sa;
 }
 
@@ -212,6 +216,18 @@ function buildAddToGoogleWalletURL({
   const token = jwt.sign(claims, s.private_key, { algorithm: 'RS256', keyid: s.private_key_id });
   return `https://pay.google.com/gp/v/save/${encodeURIComponent(token)}`;
 }
+
+async function selfTestAuth() {
+  const s = getSA();
+  const auth = new GoogleAuth({
+    credentials: { client_email: s.client_email, private_key: s.private_key },
+    scopes: ['https://www.googleapis.com/auth/wallet_object.issuer'],
+  });
+  const client = await auth.getClient();
+  const token = await client.getAccessToken();
+  console.log('Access token OK?', !!token);
+}
+selfTestAuth().catch(e => console.error('SelfTest FAILED:', e.response?.data || e));
 
 module.exports = {
   buildAddToGoogleWalletURL,

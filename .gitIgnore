@@ -1,0 +1,11 @@
+# Ignorar certificados y llaves
+certs/*.json
+certs/*.pem
+certs/*.p12
+certs/*.64
+certs/*.b64
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
