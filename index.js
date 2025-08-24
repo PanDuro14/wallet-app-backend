@@ -31,10 +31,12 @@ const v1Business = require('./src/v1/routes/businessRoutes');
 const v1CardDetails = require('./src/v1/routes/cardDetailsRoutes'); 
 const v1Users = require('./src/v1/routes/usersRoutes'); 
 const v1Wallets = require('./src/v1/routes/walletRoutes'); 
+const onboardingRoutes = require('./src/v1/routes/onboardingRoutes');
 app.use('/api/v1/business', v1Business);
 app.use('/api/v1/cards', v1CardDetails); 
 app.use('/api/v1/users', v1Users); 
 app.use('/api/v1/wallets', v1Wallets); 
+app.use('/api/v1/onboarding', onboardingRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {

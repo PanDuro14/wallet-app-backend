@@ -1,8 +1,15 @@
 const carddetailsProcess = require('./carddetailsProcess');
 const businessesProcess = require('./businessProcess');
-const { buildAddToGoogleWalletURL, ensureLoyaltyClass } = require('../services/googleWalletService');
+const { buildAddToGoogleWalletURL, ensureLoyaltyClass, getSA, normalizeGWBarcodeType, isHttps, classIdForBusinessTheme } = require('../services/googleWalletService');
 const { createPkPassBuffer } = require('../services/appleWalletService');
 const { saveBufferAsPublicPNG } = require('../services/imageStorageService');
+
+// orignes 
+const issuerId = process.env.GOOGLE_ISSUER_ID;
+const origins = (process.env.GOOGLE_WALLET_ORIGINS || 'http://localhost:4200')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
 
 // helpers para procesar los iconos 
 function toBufferMaybe(x) {
@@ -36,6 +43,7 @@ function pickAnyBuffer(obj, keys = []) {
   return null;
 }
 // ya de aqui en delante no hay helpers xd
+
 async function loadBrandAssets(businessId) {
   const cdRes  = await carddetailsProcess.getOneCardByBusiness(businessId); // puede ser obj o array
   const bizRes = await businessesProcess.getOneBusiness(businessId);        
@@ -92,29 +100,83 @@ async function issueAppleWalletPkpass(dto) {
 }
 
 
+function sanityLog() {
+  try {
+    const s = getSA(); // viene del service
+      console.log('[Wallet sanity]', {
+      issuerId,
+      sa_email: s?.client_email,
+      project_id: s?.project_id,
+      origins
+    });
+  } catch (e) {
+    console.log('[Wallet sanity] No se pudo cargar SA:', e?.message || e);
+  }
+}
+
+
 
 // Proceos para google (hasta acá abajo para no batallar al manipular uno u otro )
-async function issueGoogleWalletLink({ cardCode, userName, programName, businessId }) {
+async function issueGoogleWalletLink({
+  cardCode, userName, programName, businessId,
+  colors = {}, assets = {}, fields = {}, barcode = {}
+}) {
+  sanityLog();
+
+  // 1) Cargar branding base de BD
   const { logoBuffer, programName: pn, bg } = await loadBrandAssets(businessId);
 
-  // Google necesita URL pública (a partir del Buffer)
+  // 2) Elegir assets/colores efectivos (request > BD)
+  const logoBuf = assets.logo || logoBuffer || null;
+  const hexBg   = (colors.background || bg || '#2d3436').toString().trim();
+  const effProg = programName || pn || 'Loyalty';
+
+  // 3) Subir logo a URL pública HTTPS (si hay)
   let logoUri = null;
-  if (logoBuffer) {
-    logoUri = await saveBufferAsPublicPNG({ businessId, kind: 'logo', buffer: logoBuffer });
+  if (logoBuf) {
+    const url = await saveBufferAsPublicPNG({ businessId, kind: 'logo', buffer: logoBuf });
+    if (isHttps(url)) logoUri = url;
+    else console.warn('[Wallet] Ignorando imagen no-HTTPS:', url);
   }
 
+  // Fallback obligatorio: Google no crea la clase sin logo
+  if (!logoUri) {
+    const fb = process.env.GOOGLE_WALLET_FALLBACK_LOGO_HTTPS;
+    if (fb && isHttps(fb)) {
+      console.warn('[Wallet] Usando fallback HTTPS para programLogo:', fb);
+      logoUri = fb;
+    } else {
+      // Si prefieres devolver 400 al cliente:
+      // throw new Error('Se requiere un logo en HTTPS público para crear la clase de Google Wallet.');
+      console.warn('[Wallet] No hay logo HTTPS; se intentará sin logo (fallará con 400).');
+    }
+  }
+  // 4) Asegurar CLASE (colores y logo viven en la clase)
   await ensureLoyaltyClass({
     businessId,
-    programName: programName || pn,
-    hexBackgroundColor: bg,    // si tu ensureLoyaltyClass acepta HEX
-    logoUri: logoUri || null
+    programName: effProg,
+    hexBackgroundColor: hexBg,
+    logoUri // null si no es https
   });
 
+  // 5) Módulos (texto/imagen) y código de barras para el OBJETO
+  const textModulesData = [
+    { header: effProg, body: `Cliente: ${userName || cardCode}` }
+  ];
+
+  const type = normalizeGWBarcodeType(barcode.pref || barcode.type || barcode.format);
+  const value = (barcode.message ?? cardCode) + '';
+  const alternateText = barcode.altText ?? undefined;
+
+  // 6) Construir URL “Save to Google Wallet”
   return buildAddToGoogleWalletURL({
-    cardCode, userName,
-    brand: { programName: programName || pn, bg, logoUri: logoUri || null },
-    businessId
+    cardCode,
+    userName,
+    businessId,
+    brand: { programName: effProg, bg: hexBg, logoUri },
+    barcode: { type, value, alternateText },
+    modules: { textModulesData } 
   });
 }
 
-module.exports = { issueGoogleWalletLink, issueAppleWalletPkpass };
+module.exports = { issueGoogleWalletLink, issueAppleWalletPkpass, loadBrandAssets };

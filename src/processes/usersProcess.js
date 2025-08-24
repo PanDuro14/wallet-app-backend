@@ -15,6 +15,8 @@ const getOneUser = async (id) => {
   return userService.getOneUser(id);
 };
 
+const getOneUserByBusiness = async(id) => userService.getOneUserByBusiness(id); // cambié el estilo para ahorrar tiempo 
+
 const createUser = async (name, email, phone, business_id, points = 0, serial_number = null) => {
   // 1) crear usuario
   const newUser = await userService.createUser(name, email, phone, business_id, points, serial_number);
@@ -84,6 +86,7 @@ const regenerateWallet = async (userId) => {
 module.exports = {
   getAllUsers,
   getOneUser,
+  getOneUserByBusiness,
   createUser,
   updateUser,
   deleteUser,
