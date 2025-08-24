@@ -7,7 +7,7 @@ const path = require('path');
 
 // Configuración CORS
 const corsOptions = {
-  origin: ['http://localhost:4200', 'http://localhost:8100', 'https://2hlw0cdc-4200.usw3.devtunnels.ms', '*'],
+  origin: ['http://localhost:4200', 'http://localhost:8100', 'https://2hlw0cdc-4200.usw3.devtunnels.ms', 'https://loyalty-6a5be.web.app/', '*'],
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true, 
