@@ -209,6 +209,15 @@ async function createPkPassBuffer({
   const messageEncoding = barcode?.encoding || 'iso-8859-1';
   const altText = barcode?.altText ?? msg;
 
+  const baseRaw = webServiceBase || process.env.PUBLIC_BASE_URL || process.env.WALLET_BASE_URL || '';
+  if (!baseRaw) {
+    throw new Error('Base pública no configurada (PUBLIC_BASE_URL o WALLET_BASE_URL).');
+  }
+  const base = baseRaw.replace(/\/+$/, ''); // quita / repetidos del final
+  if (!appleAuthToken) {
+    throw new Error('appleAuthToken requerido para authenticationToken.');
+  }
+
   // Acepta 1 formato (format/type/pref) o varios (formats[])
   let formatsRaw = [];
   if (Array.isArray(barcode?.formats) && barcode.formats.length) {
