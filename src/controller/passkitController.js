@@ -126,6 +126,7 @@ const getPass = async (req, res) => {
         secondary: [{ key: 'member', label: 'MEMBER', value: row.name || '' }],
         back:      [{ key: 'memberId', label: 'Member ID', value: row.loyalty_account_id || String(row.id) }]
       },
+      appleAuthToken: row.apple_auth_token,
       // authToken: row.apple_auth_token, // opcional si tu createPkPassBuffer lo soporta
     });
 

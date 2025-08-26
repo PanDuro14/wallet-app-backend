@@ -159,7 +159,8 @@ function normalizeBarcodePref(pref) {
 async function createPkPassBuffer({
     cardCode, userName, programName,
     backgroundColor, foregroundColor,
-    colors = {}, fields = {}, barcode = {}, assets = {}, points
+    colors = {}, fields = {}, barcode = {}, assets = {}, points, 
+    appleAuthToken, webServiceBase
   }) {
   if (!cardCode) throw new Error('cardCode requerido.');
   if (!process.env.PASS_TYPE_IDENTIFIER || !process.env.APPLE_TEAM_ID) {
@@ -240,8 +241,10 @@ async function createPkPassBuffer({
     passTypeIdentifier: process.env.PASS_TYPE_IDENTIFIER,
     serialNumber: cardCode,
     teamIdentifier: process.env.APPLE_TEAM_ID,
-    webServiceURL: process.env.PASS_WEBSERVICE_URL || undefined,
-    authenticationToken: process.env.PASS_AUTH_TOKEN || undefined,
+
+    webServiceURL:  `${base}/api/v1/wallets`,
+    authenticationToken:  appleAuthToken,
+
     organizationName: process.env.ORG_NAME || 'Tu Empresa',
     description: `${programName || 'Loyalty'} Card`,
     logoText: programName || undefined,
@@ -250,7 +253,9 @@ async function createPkPassBuffer({
     labelColor: lc,
     storeCard: { headerFields: [], primaryFields, secondaryFields, auxiliaryFields: [], backFields, additionalInfoFields: [] },
     barcodes: barcodesArr,           
-    barcode: barcodesArr[0]    
+    barcode: barcodesArr[0], 
+
+ 
   };
 
   // 4) Forzar pass.json
