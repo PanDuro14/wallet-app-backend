@@ -187,11 +187,12 @@ const registerDevice = async (req, res) => {
 const bumpPoints = async (req, res) => {
   try {
     const serial = cleanUuid(req.params.serial);
-    const { delta } = Number(req.body?.delta ?? 0);
 
+    const raw = req.body?.delta;
+    const delta = typeof raw === 'string' ? Number(raw.trim()) : Number(raw);
+  
     if (!isUuid(serial)) return res.status(400).send('invalid serial');
     if (!Number.isFinite(delta)) return res.status(400).json({ error: 'invalid delta' });
-
 
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
@@ -202,7 +203,7 @@ const bumpPoints = async (req, res) => {
     if (process.env.APNS_ENABLED === 'true') {
       const tokens = await listPushTokensBySerial(serial);
       const results = await Promise.allSettled(tokens.map(t => notifyWallet(t)));
-      
+
       notified = results.filter(r => r.status === 'fulfilled' && r.value === 200).length;
     }
     return res.json({ ok: true, points, notified });
