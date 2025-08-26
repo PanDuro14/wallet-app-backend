@@ -53,7 +53,15 @@ const createUserAndIssueProcess = async ({ business_id, name, email, phone, card
   // 2) Identificadores del pase (defínelos ANTES de validar longitudes)
   const serial_number      = crypto.randomUUID();
   const apple_auth_token   = crypto.randomBytes(16).toString('hex');
-  const apple_pass_type_id = design.pass_type_id; 
+  
+  // apple_pass_type_id 
+  const typeIdFromEnv = process.env.PASS_TYPE_IDENTIFIER; // ej: pass.mx.windoe.loyalty
+  if (!typeIdFromEnv || !/^pass\./.test(typeIdFromEnv)) {
+    throw new Error('PASS_TYPE_IDENTIFIER no configurado o inválido (debe iniciar con "pass.")');
+  }
+  const apple_pass_type_id = typeIdFromEnv; // ← SIEMPRE el real, no el del diseño
+
+
   const loyalty_account_id = `CARD-${business_id}-${serial_number.slice(0, 8).toUpperCase()}`;
 
   // 3) Validaciones de longitud (evita 22001 con mensaje claro)

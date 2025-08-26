@@ -92,6 +92,8 @@ const getPass = async (req, res) => {
     const ENFORCE = process.env.PASS_ENFORCE_AUTH === 'true'; // en dev pon false
     if (ENFORCE && !authOk(req, row)) {
       return res.sendStatus(401);
+    } else {
+      if (passTypeId !== userPassType) return res.sendStatus(401);
     }
 
     // 304 si el cliente ya tiene la última versión

@@ -2,6 +2,10 @@ const dbConnection = require('./dbConection');
 const dbLocal = require('./dbConectionLocal'); 
 const { v4: uuidv4 } = require('uuid');
 
+const PASS_TYPE_IDENTIFIER = process.env.PASS_TYPE_IDENTIFIER;
+if (!PASS_TYPE_IDENTIFIER || !/^pass\./.test(PASS_TYPE_IDENTIFIER)) {
+  console.error('[BOOT] PASS_TYPE_IDENTIFIER inválido o vacío. Debe iniciar con "pass."');
+}
 let pool; 
 
 (async () => {
@@ -130,14 +134,17 @@ const markWalletAdded = async ({ userId }) => {
 
 // INSERT con columnas explícitas (recibe el objeto “full”)
 const createUserFull = async (d) => {
-  // serial fallback
   const serial = d.serial_number || uuidv4();
 
+  // tomar del payload o caer a env
+  const apple_pass_type_id = d.apple_pass_type_id || PASS_TYPE_IDENTIFIER;
+
+  // guardas token y type id ya normalizados por el process
   const sql = `
     INSERT INTO users
       (name, email, phone, business_id, points, serial_number,
-       apple_auth_token, apple_pass_type_id, card_detail_id, loyalty_account_id)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       apple_auth_token, apple_pass_type_id, card_detail_id, loyalty_account_id, updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
     RETURNING *`;
   const params = [
     d.name,
@@ -147,7 +154,7 @@ const createUserFull = async (d) => {
     d.points ?? 0,
     serial,
     d.apple_auth_token || null,
-    d.apple_pass_type_id || null,
+    apple_pass_type_id,                
     d.card_detail_id || null,
     d.loyalty_account_id || null
   ];
@@ -162,16 +169,30 @@ const updateUserFields = async (id, patch) => {
     'card_detail_id','loyalty_account_id','wallet_url','wallet_added','wallet_added_at',
     'serial_number','updated_at'
   ]);
+
+  // Nunca permitas cambiar el pass type id a algo distinto
+  if (patch.apple_pass_type_id && patch.apple_pass_type_id !== PASS_TYPE_ID) {
+    patch.apple_pass_type_id = PASS_TYPE_ID;
+  }
+  // Repara token corto o vacío
+  if ('apple_auth_token' in patch) {
+    patch.apple_auth_token = ensureAuthToken(patch.apple_auth_token);
+  }
+  // (Opcional) impedir cambiar serial salvo que tú lo decidas
+  // if ('serial_number' in patch) delete patch.serial_number;
+
   const keys = Object.keys(patch).filter(k => allowed.has(k));
   if (!keys.length) {
     const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [id]);
     return rows[0];
   }
+
   // fuerza updated_at si no viene
   if (!keys.includes('updated_at')) {
     keys.push('updated_at');
     patch.updated_at = new Date();
   }
+
   const setClauses = keys.map((k, i) => `"${k}"=$${i+2}`);
   const params = [id, ...keys.map(k => patch[k])];
 
