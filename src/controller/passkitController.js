@@ -12,6 +12,8 @@ const { notifyWallet } = require('../services/apnsService');
 const { createPkPassBuffer } = require('../services/appleWalletService');
 const cardSvc = require('../services/carddetailService');
 const cleanUuid = (v='') => decodeURIComponent(v).trim();
+const isUuid = (v='') =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 
 function authOk(req, row) {
   const header = req.headers.authorization || '';
@@ -185,8 +187,11 @@ const registerDevice = async (req, res) => {
 const bumpPoints = async (req, res) => {
   try {
     const serial = cleanUuid(req.params.serial);
-    const { delta } = req.body || {};
+    const { delta } = Number(req.body?.delta ?? 0);
+
     if (!isUuid(serial)) return res.status(400).send('invalid serial');
+    if (!Number.isFinite(delta)) return res.status(400).json({ error: 'invalid delta' });
+
 
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
@@ -197,9 +202,8 @@ const bumpPoints = async (req, res) => {
     if (process.env.APNS_ENABLED === 'true') {
       const tokens = await listPushTokensBySerial(serial);
       const results = await Promise.allSettled(tokens.map(t => notifyWallet(t)));
-      for (const r of results) {
-        if (r.status === 'fulfilled' && r.value === 200) notified++;
-      }
+      
+      notified = results.filter(r => r.status === 'fulfilled' && r.value === 200).length;
     }
     return res.json({ ok: true, points, notified });
   } catch (err) {
