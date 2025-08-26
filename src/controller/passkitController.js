@@ -154,6 +154,9 @@ const registerDevice = async (req, res) => {
     if (!pushToken) return res.status(400).json({ error: 'pushToken required' });
     if (!isUuid(serial)) return res.status(400).send('invalid serial');
 
+    console.log('[registerDevice] originalUrl:', req.originalUrl);
+    console.log('[registerDevice] params:', req.params);
+
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
 

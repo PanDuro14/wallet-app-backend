@@ -13,6 +13,8 @@ router.post('/google/ensure', walletController.ensureGoogleClass);
 // PassKit Web Service
 router.get('/v1/passes/:passTypeId/:serial', passkitCtrl.getPass);
 router.post('/v1/devices/:deviceId/registrations/:passTypeId/:serial', passkitCtrl.registerDevice);
+// temporal 
+outer.post('/v1/devices/:deviceId/registrations_attido)/:passTypeId/:serial', passkitCtrl.registerDevice);
 
 // Ruta interna para cambiar puntos
 router.post('/internal/passes/:serial/points', passkitCtrl.bumpPoints);
