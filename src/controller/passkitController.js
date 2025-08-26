@@ -5,12 +5,13 @@ const {
   bumpPointsBySerial,
   listPushTokensBySerial, 
   listUpdatedSerialsSince,  
-  deleteRegistratio
+  deleteRegistration 
 } = require('../db/appleWalletdb');
 const { loadBrandAssets } = require('../processes/walletProcess');
 const { notifyWallet } = require('../services/apnsService');
 const { createPkPassBuffer } = require('../services/appleWalletService');
 const cardSvc = require('../services/carddetailService');
+const cleanUuid = (v='') => decodeURIComponent(v).trim();
 
 function authOk(req, row) {
   const header = req.headers.authorization || '';
@@ -40,7 +41,8 @@ const listRegistrations = async (req, res) => {
 // DELETE /v1/devices/:deviceId/registrations/:passTypeId/:serial
 const deregisterDevice = async (req, res) => {
   try {
-    const { deviceId, passTypeId, serial } = req.params;
+    const { deviceId, passTypeId } = req.params;
+    const serial = cleanUuid(req.params.serial);
     if (passTypeId !== process.env.PASS_TYPE_IDENTIFIER) return res.sendStatus(404);
 
     const row = await findUserPassBySerial(serial);
@@ -69,7 +71,9 @@ const acceptLogs = async (req, res) => {
 // GET /v1/passes/:passTypeId/:serial
 const getPass = async (req, res) => {
   try {
-    const { passTypeId, serial } = req.params;
+    const passTypeId = req.params.passTypeId;
+    const serial = cleanUuid(req.params.serial);
+
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
 
@@ -142,15 +146,23 @@ const getPass = async (req, res) => {
 // Body: { "pushToken": "xxxxx" }
 const registerDevice = async (req, res) => {
   try {
-    const { deviceId, passTypeId, serial } = req.params;
+    const deviceId = req.params.deviceId;
+    const passTypeId = req.params.passTypeId;
+    const serial = cleanUuid(req.params.serial);
     const { pushToken } = req.body || {};
     if (!pushToken) return res.status(400).json({ error: 'pushToken required' });
+    if (!isUuid(serial)) return res.status(400).send('invalid serial');
 
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
 
+    const EXPECTED = process.env.PASS_TYPE_IDENTIFIER;
     const userPassType = row.apple_pass_type_id || row.pass_type_id;
-    if (passTypeId !== userPassType || !authOk(req, row)) return res.sendStatus(401);
+    const passTypeOk = (passTypeId === EXPECTED) || (passTypeId === userPassType);
+    if (!passTypeOk) return res.sendStatus(401);
+
+    const ENFORCE = process.env.PASS_ENFORCE_AUTH === 'true';
+    if (ENFORCE && !authOk(req, row)) return res.sendStatus(401);
 
     await upsertRegistration({
       userId: row.id,
@@ -158,7 +170,6 @@ const registerDevice = async (req, res) => {
       deviceLibraryId: deviceId,
       pushToken
     });
-
     return res.sendStatus(201);
   } catch (err) {
     console.error('registerDevice error:', err);
@@ -169,8 +180,10 @@ const registerDevice = async (req, res) => {
 // POST /internal/passes/:serial/points  { "delta": 50 }
 const bumpPoints = async (req, res) => {
   try {
-    const { serial } = req.params;
+    const serial = cleanUuid(req.params.serial);
     const { delta } = req.body || {};
+    if (!isUuid(serial)) return res.status(400).send('invalid serial');
+
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
 
@@ -179,11 +192,11 @@ const bumpPoints = async (req, res) => {
     let notified = 0;
     if (process.env.APNS_ENABLED === 'true') {
       const tokens = await listPushTokensBySerial(serial);
-      await Promise.all(tokens.map(t =>
-        notifyWallet(t).then(() => { notified++; }).catch(() => {})
-      ));
+      const results = await Promise.allSettled(tokens.map(t => notifyWallet(t)));
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value === 200) notified++;
+      }
     }
-
     return res.json({ ok: true, points, notified });
   } catch (err) {
     console.error('bumpPoints error:', err);
