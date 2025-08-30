@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const businessesProcess = require('../processes/businessProcess'); 
+const { createBusinessWithDesignProcess, setBusinessDefaultDesignProcess } = require('../processes/businessWithDesignProcess');
 
 const loginBusiness = async (req, res) => {
   const { email, password } = req.body;
@@ -121,6 +122,66 @@ const getEmail = async (req, res) => {
   }
 }
 
+const getCurrentDesignById = async (req, res) => {
+  const { id } = req.params; 
+  try {
+    if(!id) res.status(404).json({ error: 'Negocio no encontrado'}); 
+    const desing = await businessesProcess.getCurrentDesignById(id); 
+    res.status(200).json(desing); 
+  } catch (error){
+    res.status(502).json({ error: 'Error al obtener el diseño '}); 
+  }
+}
+
+const updateCurrentDesingById = async (req, res) => {
+  const { id } = req.params; 
+  const { desingVal} = req.body; 
+  try {
+    if(!id) res.status(404).json({ error: 'Negocio no encontrado'}); 
+    if(!desingVal) res.status(404).json({ error: 'Diseño es necesario '}); 
+    const desing = await businessesProcess.updateCurrentDesingById(desingVal, id); 
+    res.status(200).json(desing); 
+  } catch (error){
+    res.status(502).json({ error: 'Error al actualizar el diseño '}); 
+  }
+}
+
+const createBusinessWithDesign = async (req, res) => {
+  try {
+    const { business, design } = req.body || {};
+    if (!business?.name) return res.status(400).json({ error: 'business.name requerido' });
+    if (!design?.colors || !design?.barcode) return res.status(400).json({ error: 'design incompleto' });
+
+    const out = await createBusinessWithDesignProcess({ business, design });
+    return res.status(201).json(out);
+  } catch (e) {
+    console.error('createBusinessWithDesign error:', e);
+    return res.status(e.statusCode || 500).json({ error: e.message || 'Server error' });
+  }
+};
+
+// Definir un diseño predeterminado 
+const setDefaultDesign = async (req, res) => {
+  try {
+    const bizId    = Number.parseInt(String(req.params.businessId).trim(), 10);
+    const designId = Number.parseInt(String(req.body?.card_detail_id).trim(), 10);
+    if (!Number.isFinite(bizId) || !Number.isFinite(designId)) {
+      return res.status(400).json({ error: 'IDs inválidos (enteros requeridos)' });
+    }
+
+    const out = await setBusinessDefaultDesignProcess({
+      business_id: bizId,
+      card_detail_id: designId,
+    });
+    return res.json(out);
+  } catch (e) {
+    return res.status(e.statusCode || 500).json({ error: e.message || 'Server error' });
+  }
+};
+
+
+
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -128,5 +189,9 @@ module.exports = {
   createBusiness,
   updateBusiness,
   deleteBusiness,
-  getEmail
+  getEmail, 
+  getCurrentDesignById, 
+  updateCurrentDesingById,
+  createBusinessWithDesign, 
+  setDefaultDesign
 };

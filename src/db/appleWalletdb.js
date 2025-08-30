@@ -40,15 +40,15 @@ const findUserPassBySerial = async (serial) => {
 
 
 // guardar/actualizar push token por device 
-const upsertRegistration = async ({ userId, serial, deviceLibraryId, pushToken}) => {
+const upsertRegistration = async ({ userId, serial, deviceLibraryId, passTypeId, pushToken}) => {
     return new Promise((resolve, reject) => {
         const sql = `
-            INSERT INTO public.apple_wallet_registrations (user_id, serial_number, device_library_id, push_token)
+            INSERT INTO public.apple_wallet_registrations (user_id, serial_number, device_library_id, passTypeId, push_token)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (user_id, device_library_id)
             DO UPDATE SET push_token = EXCLUDED.push_token, updated_at = CURRENT_TIMESTAMP
         `; 
-        pool.query(sql, [userId, serial, deviceLibraryId, pushToken], (error, results) => {
+        pool.query(sql, [userId, serial, deviceLibraryId, passTypeId, pushToken], (error, results) => {
             if(error) return reject(error); 
             resolve(`Pass del user: ${userId} y serial: ${serial} ha sido actualizada exitosamente`); 
         }); 
@@ -71,24 +71,45 @@ const listPushTokensBySerial = async (serial) => {
 }
 
 // suma/resta puntos y devuelve el nuevo saldo 
-const bumpPointsBySerial = async(serial, delta) => {
-    return new Promise((resolve, reject) => {
-        const sql = `
-            UPDATE public.users
-            SET points = COALESCE(points,0) + $2, updated_at = CURRENT_TIMESTAMP
-            WHERE serial_number = $1
-            RETURNING points
-        `; 
-        pool.query(sql, [serial, Number(delta || 0)], (error, results) => {
-            if(error) return reject(error); 
-            resolve(results.rows[0]?.points ?? null); 
-        }); 
-    });
+async function bumpPointsBySerial(serial, delta) {
+  const sql = `
+    UPDATE users
+    SET points = GREATEST(0, points + $2),
+        updated_at = NOW() AT TIME ZONE 'UTC'
+    WHERE serial_number = $1
+    RETURNING
+      points,
+      updated_at AS "updatedAt";
+  `;
+  const { rows } = await pool.query(sql, [serial, delta]);
+  return rows[0] || null;
+}
+
+// db/appleWalletdb.js
+async function listUpdatedSerialsSince({ deviceId, passTypeId, since }) {
+  let sinceSec = 0;
+  if (since) {
+    if (/^\d+$/.test(since)) sinceSec = since.length > 10 ? Math.floor(Number(since)/1000) : Number(since);
+    else { const t = Date.parse(since); if (!Number.isNaN(t)) sinceSec = Math.floor(t/1000); }
+  }
+
+  const sql = `
+    SELECT r.serial_number AS serial, u.updated_at
+    FROM apple_wallet_registrations r
+    JOIN users u ON u.serial_number = r.serial_number
+    WHERE r.device_library_id = $1
+      AND r.pass_type_id      = $2
+      AND ($3 = 0 OR EXTRACT(EPOCH FROM u.updated_at)::bigint > $3)
+    ORDER BY u.updated_at DESC
+  `;
+  const { rows } = await pool.query(sql, [deviceId, passTypeId, sinceSec]);
+  return { serialNumbers: rows.map(r => r.serial), lastUpdated: (rows[0]?.updated_at || new Date()).toUTCString() };
 }
 
 module.exports = {
     findUserPassBySerial, 
     upsertRegistration, 
     listPushTokensBySerial, 
-    bumpPointsBySerial
+    bumpPointsBySerial, 
+    listUpdatedSerialsSince
 }

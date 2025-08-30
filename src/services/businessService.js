@@ -68,6 +68,15 @@ const getEmail = async (email) => {
   return result; 
 }
 
+const getCurrentDesignById = async (id) => {
+  return businessDb.getCurrentDesignById(id);          // 👈 pasa número, no objeto
+};
+
+const updateCurrentDesignById = async (designId, businessId) => {
+  return businessDb.updateCurrentDesignById(designId, businessId); // 👈 nombre correcto y números
+};
+
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -75,5 +84,7 @@ module.exports = {
   createBusiness,
   updateBusiness,
   deleteBusiness,
-  getEmail
+  getEmail, 
+  getCurrentDesignById, 
+  updateCurrentDesignById
 };

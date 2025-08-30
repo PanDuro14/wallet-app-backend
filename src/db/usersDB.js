@@ -55,7 +55,7 @@ const getOneUserByBusiness = async(id) => {
     const sql = `SELECT * FROM users WHERE business_id = $1`; 
     pool.query(sql, [id], (error, results) => {
       if(error) return reject(error); 
-      resolve(results.rows[0]); 
+      resolve(results.rows); 
     }); 
   }); 
 }
@@ -171,8 +171,8 @@ const updateUserFields = async (id, patch) => {
   ]);
 
   // Nunca permitas cambiar el pass type id a algo distinto
-  if (patch.apple_pass_type_id && patch.apple_pass_type_id !== PASS_TYPE_ID) {
-    patch.apple_pass_type_id = PASS_TYPE_ID;
+  if (patch.apple_pass_type_id && patch.apple_pass_type_id !== PASS_TYPE_IDENTIFIER) {
+    patch.apple_pass_type_id = PASS_TYPE_IDENTIFIER;
   }
   // Repara token corto o vacío
   if ('apple_auth_token' in patch) {
@@ -201,7 +201,20 @@ const updateUserFields = async (id, patch) => {
   return rows[0];
 };
 
-
+// db/appleWalletdb.js (o donde defines tus queries de Apple Wallet)
+async function bumpPointsBySerial(serial, delta) {
+  const sql = `
+    UPDATE users
+    SET points = GREATEST(0, points + $2),
+        updated_at = NOW() AT TIME ZONE 'UTC'
+    WHERE serial_number = $1
+    RETURNING
+      points,
+      updated_at AS "updatedAt";
+  `;
+  const { rows } = await pool.query(sql, [serial, delta]);
+  return rows[0] || null;
+}
 
 module.exports = {
   getAllUsers,
@@ -213,5 +226,6 @@ module.exports = {
   saveUserWallet, 
   markWalletAdded, 
   createUserFull,
-  updateUserFields
+  updateUserFields, 
+  bumpPointsBySerial,
 };

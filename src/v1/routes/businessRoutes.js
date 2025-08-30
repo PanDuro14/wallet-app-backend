@@ -10,7 +10,8 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 }); 
 
-// Rutas para las operaciones relacionadas con los negocios
+router.put('/:businessId/design/default', businessController.setDefaultDesign);
+router.post('/with-design', businessController.createBusinessWithDesign);
 router
   .post('/getemail', businessController.getEmail)
   .post('/loginBusiness', businessController.loginBusiness)
@@ -23,5 +24,7 @@ router
     {name: 'logo', maxCount: 1}]), 
     businessController.updateBusiness)
   .delete('/:id', businessController.deleteBusiness)
+  .get('/current-desing/:id', businessController.getCurrentDesignById)
+  .put('/:id/default', businessController.updateCurrentDesingById)
 
 module.exports = router;

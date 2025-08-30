@@ -19,4 +19,8 @@ router.post('/v1/devices/:deviceId/registrations_attido/:passTypeId/:serial', pa
 // Ruta interna para cambiar puntos
 router.post('/internal/passes/:serial/points', passkitCtrl.bumpPoints);
 
+router.get('/v1/devices/:deviceId/registrations/:passTypeId', passkitCtrl.listRegistrations);
+router.delete('/v1/devices/:deviceId/registrations/:passTypeId/:serial', passkitCtrl.deregisterDevice);
+router.post('/v1/log', passkitCtrl.acceptLogs);
+
 module.exports = router;

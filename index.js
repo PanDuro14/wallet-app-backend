@@ -7,7 +7,7 @@ const path = require('path');
 
 // Configuración CORS
 const corsOptions = {
-  origin: ['http://localhost:4200', 'http://localhost:8100', 'https://2hlw0cdc-4200.usw3.devtunnels.ms', 'https://loyalty-6a5be.web.app', '*'],
+  origin: ['http://localhost:4200', 'http://localhost:8100', 'https://wallet-app-backend.fly.dev', 'https://loyalty-6a5be.web.app', '*'],
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true, 
@@ -20,7 +20,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
 // Puerto
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor escuchando en: ${PORT}`);
 });

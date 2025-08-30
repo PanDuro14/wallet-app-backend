@@ -69,6 +69,15 @@ const getEmail = async (email) => {
   return result; 
 }
 
+const getCurrentDesignById = async (id) => {
+  return businessService.getCurrentDesignById(id);
+};
+
+const updateCurrentDesignById = async (designId, businessId) => {
+  return businessService.updateCurrentDesignById(designId, businessId);
+};
+
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -76,5 +85,7 @@ module.exports = {
   createBusiness,
   updateBusiness,
   deleteBusiness,
-  getEmail
+  getEmail, 
+  getCurrentDesignById, 
+  updateCurrentDesignById
 };

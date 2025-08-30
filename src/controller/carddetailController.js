@@ -1,5 +1,7 @@
 const carddetailProcess = require('../processes/carddetailsProcess'); 
 const businessProcess = require('../processes/businessProcess'); 
+const { normalizeBarcodeSpec } = require('../utils/design');
+const carddetailService = require('../services/carddetailService');
 
 const getAllCardDetails = async(req, res) => {
     try {
@@ -159,6 +161,46 @@ const generateQR = async (req, res) => {
   }
 };
 
+// NUEVOS endpoints (no tocan multipart)
+
+
+const createDesignUnified = async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.businessId) return res.status(400).json({ error: 'businessId requerido' });
+
+    // normaliza barcode para guardar limpio
+    if (body.barcode) body.barcode = normalizeBarcodeSpec(body.barcode);
+    const saved = await carddetailService.createUnifiedDesign({
+      business_id: Number(body.businessId),
+      design_json: body
+    });
+    return res.status(201).json({ id: saved.id, design: saved.design_json });
+  } catch (e) {
+    console.error('createDesignUnified', e);
+    return res.status(400).json({ error: e.message || 'Invalid design body' });
+  }
+};
+
+const updateDesignUnified = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const body = req.body || {};
+    if (body.barcode) body.barcode = normalizeBarcodeSpec(body.barcode);
+    const updated = await carddetailService.updateUnifiedDesign({
+      id,
+      business_id: body.businessId ? Number(body.businessId) : undefined,
+      design_json: Object.keys(body).length ? body : undefined
+    });
+    if (!updated) return res.status(404).json({ error: 'No encontrado' });
+    return res.json({ ok: true, id, design: updated.design_json });
+  } catch (e) {
+    console.error('updateDesignUnified', e);
+    return res.status(400).json({ error: e.message || 'Invalid update' });
+  }
+};
+
+
 
 module.exports = {
     getAllCardDetails,
@@ -168,5 +210,7 @@ module.exports = {
     deleteCardDetails, 
     getAllCardsByBusiness, 
     getOneCardByBusiness,
-    generateQR
+    generateQR, 
+    createDesignUnified, 
+    updateDesignUnified
 }

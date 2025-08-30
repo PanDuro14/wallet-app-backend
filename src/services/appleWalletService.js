@@ -182,14 +182,24 @@ async function createPkPassBuffer({
   // 2) Clonar modelo y override de imágenes
   const PASS_MODEL_DIR = process.env.PASS_MODEL_DIR || path.join(process.cwd(), 'passModels', 'loyalty.pass');
   const modelDir = await buildTempModel(PASS_MODEL_DIR, assets);
+  function rmIfExists(p) { try { fs.unlinkSync(p); } catch {} }
+
+  if (assets.strip === null) {
+    const STRIP_FILES = [
+      'strip.png','strip@2x.png','strip@3x.png',
+      'strip.jpg','strip@2x.jpg','strip@3x.jpg'
+    ];
+    for (const f of STRIP_FILES) rmIfExists(path.join(modelDir, f));
+  }
+
 
   // 3) Construir payload
   const bg = colors.background ? (hexToRgb(colors.background) || colors.background)
                                : (hexToRgb(backgroundColor) || backgroundColor || 'rgb(45,52,54)');
   const fg = colors.foreground ? (hexToRgb(colors.foreground) || colors.foreground)
                                : (hexToRgb(foregroundColor) || foregroundColor || 'rgb(230,230,230)');
-  const lc = colors.label ? ensureRgbColor(colors.label) : undefined;
-
+  const lc = colors.label ? (hexToRgb(colors.label) || colors.label) : undefined;
+  
   // Si llega "points" directo, forzamos/inyectamos en fields.primary
   if (points != null) {
     const v = String(points);
@@ -200,8 +210,7 @@ async function createPkPassBuffer({
   }
 
   const primaryFields   = fields.primary   ?? [{ key: 'points', label: 'POINTS', value: '0', textAlignment: 'PKTextAlignmentCenter' }];
-  const secondaryFields = (fields.secondary ?? [{ key: 'name', label: 'MEMBER', value: userName || 'Member' }])
-                          .concat([{ key: 'code', label: 'Cuenta', value: cardCode }]);
+  const secondaryFields = fields.secondary ?? [{ key: 'member', label: 'MEMBER', value: userName || 'Member' }];
   const backFields      = fields.back ?? [];
 
   // formato de codigo qr 

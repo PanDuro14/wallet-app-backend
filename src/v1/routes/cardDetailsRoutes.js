@@ -26,4 +26,9 @@ router
         ]), carddetailController.updateCardDetails)
     .delete('/:id', carddetailController.deleteCardDetails)
 
+
+// routes/carddesign.routes.js
+router.post('/unified', carddetailController.createDesignUnified);
+router.put('/unified/:id', carddetailController.updateDesignUnified);
+
 module.exports = router; 

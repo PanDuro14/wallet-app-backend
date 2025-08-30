@@ -34,6 +34,9 @@ const getOneCardByBusiness = async(business_id, id) => {
     return cardDetail; 
 }
 
+const createUnifiedDesign = (payload) => cardDetailDb.createUnifiedDesign(payload);
+const updateUnifiedDesign = (payload) => cardDetailDb.updateUnifiedDesign(payload);
+
 module.exports = {
     getAllCardDetails,
     getOneCardDetails,
@@ -41,5 +44,7 @@ module.exports = {
     updateCardDetails, 
     deleteCardDetails, 
     getAllCardsByBusiness, 
-    getOneCardByBusiness
+    getOneCardByBusiness, 
+    createUnifiedDesign, 
+    updateUnifiedDesign
 }

@@ -121,6 +121,45 @@ const getEmail = async (email) => {
   }); 
 }
 
+const getCurrentDesignById = async(id) => {
+  return new Promise((resolve, reject) => {
+    const sql = 'SELECT default_card_detail_id FROM  businesses WHERE id = $1'; 
+    pool.query(sql, [id], (error, results) => {
+      if(error) return reject(error); 
+      resolve(results.rows[0]); 
+    });
+  }); 
+}
+
+
+async function updateCurrentDesignById(designId, businessId) {
+  return new Promise((resolve, reject) => {
+    const did = Number.parseInt(String(designId).trim(), 10);
+    const bid = Number.parseInt(String(businessId).trim(), 10);
+    if (!Number.isFinite(did) || !Number.isFinite(bid)) {
+      const err = new Error('IDs inválidos'); err.statusCode = 400; return reject(err);
+    }
+    if (did > 2147483647 || bid > 2147483647 || did < -2147483648 || bid < -2147483648) {
+      const err = new Error('IDs fuera de rango INTEGER'); err.statusCode = 400; return reject(err);
+    }
+
+    const sql = `
+      UPDATE businesses
+         SET default_card_detail_id = $1::integer,
+             updated_at = NOW()
+       WHERE id = $2::integer
+       RETURNING id, default_card_detail_id
+    `;
+    pool.query(sql, [did, bid], (error, results) => {       
+      if (error) return reject(error);
+      if (!results.rowCount) {
+        const e = new Error('Negocio no encontrado'); e.statusCode = 404; return reject(e);
+      }
+      resolve(results.rows[0]);
+    });
+  });
+}
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -129,4 +168,6 @@ module.exports = {
   updateBusiness,
   deleteBusiness,
   getEmail,
+  getCurrentDesignById, 
+  updateCurrentDesignById
 };

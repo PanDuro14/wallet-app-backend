@@ -26,7 +26,7 @@ const getAllCardDetails = async () => {
         const sql = 'SELECT * FROM card_details'; 
         pool.query(sql, (error, results) => {
             if(error) return reject(error); 
-            resolve(results.rows); 
+            resolve(results.rows[0]); 
         }); 
     }); 
 }
@@ -36,7 +36,7 @@ const getOneCardDetails = async (id) => {
         const sql = 'SELECT * FROM card_details WHERE id = $1'; 
         pool.query(sql, [id], (error, resutls) => {
             if(error) return reject(error); 
-            resolve(resutls.rows); 
+            resolve(resutls.rows[0]); 
         }); 
     }); 
 }
@@ -112,7 +112,28 @@ const getOneCardByBusiness = async (business_id, id) => {
     }); 
 }
 
+// NUEVO: crear/actualizar diseño unificado (JSON)
+const createUnifiedDesign = async ({ business_id, design_json }) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      INSERT INTO card_details (business_id, design_json, created_at, updated_at)
+      VALUES ($1, $2, NOW(), NOW()) RETURNING *`;
+    pool.query(sql, [business_id, design_json], (err, r) => err ? reject(err) : resolve(r.rows[0]));
+  });
+};
 
+const updateUnifiedDesign = async ({ id, business_id, design_json }) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      UPDATE card_details
+      SET business_id = COALESCE($2, business_id),
+          design_json = COALESCE($3, design_json),
+          updated_at  = NOW()
+      WHERE id = $1
+      RETURNING *`;
+    pool.query(sql, [id, business_id || null, design_json || null], (e, r) => e ? reject(e) : resolve(r.rows[0]));
+  });
+};
 
 module.exports = {
     getAllCardDetails,
@@ -121,5 +142,7 @@ module.exports = {
     updateCardDetails, 
     deleteCardDetails, 
     getAllCardsByBusiness, 
-    getOneCardByBusiness
+    getOneCardByBusiness, 
+    createUnifiedDesign, 
+    updateUnifiedDesign
 }
