@@ -52,57 +52,65 @@ function makeJwt() {
   return cachedJwt;
 }
 
+// apnsService.js – sendPush
 function sendPush({ pushToken, host }) {
   return new Promise((resolve) => {
-    const client = http2.connect(`https://${host}`);
+    const client = http2.connect(`https://${host}`, { timeout: 10000 });
     const jwt = makeJwt();
     if (!jwt) { client.close(); return resolve({ status: 0, reason: 'NoJWT' }); }
 
-    let status = 0, body = '';
+    let status = 0, resp = '';
+    const body = Buffer.from(JSON.stringify({ aps: { 'content-available': 1 } }), 'utf8');
     const req = client.request({
       ':method': 'POST',
       ':path': `/3/device/${pushToken}`,
       'authorization': `bearer ${jwt}`,
-      'apns-topic': APNS_TOPIC,      // = tu passTypeIdentifier
-      'apns-push-type': 'pass',      // 👈 obligatorio para Wallet
-      'apns-priority': '10',         // 👈 recomendado
-      'content-length': 0            // cuerpo vacío está OK para Wallet
+      'apns-topic': APNS_TOPIC,
+      'apns-push-type': 'background',
+      'apns-priority': '5',
+      'content-type': 'application/json',
+      'content-length': body.length
     });
-
-    req.on('response', (headers) => { status = headers[':status'] || 0; });
-    req.on('data', (chunk) => { body += chunk.toString(); });
+    
+    req.on('response', h => { status = h[':status'] || 0; });
+    req.on('data', c => { resp += c.toString(); });
     req.on('end', () => {
-      let reason = null;
-      try { reason = JSON.parse(body).reason; } catch {}
+      let reason = null; try { reason = JSON.parse(resp).reason; } catch {}
       client.close();
       resolve({ status, reason });
     });
-    req.on('error', (e) => { client.close(); resolve({ status: 0, reason: e?.message || 'connError' }); });
-    req.end();
+    req.on('error', e => { client.close(); resolve({ status: 0, reason: e?.message || 'connError' }); });
+    req.end(body);
   });
 }
 
-const notifyWallet = async (pushToken) => {
-  // Host por config (si no has seteado APNS_SANDBOX, asume sandbox en dev)
-  const preferSandbox = process.env.APNS_SANDBOX === 'true';
-  const firstHost = preferSandbox ? HOSTS.sandbox : HOSTS.prod;
-  const secondHost = preferSandbox ? HOSTS.prod : HOSTS.sandbox;
 
+const notifyWallet = async (pushToken, env, ctx) => {
+  const firstHost = env === 'sandbox' ? HOSTS.sandbox : HOSTS.prod;
   const first = await sendPush({ pushToken, host: firstHost });
-  if (first.status === 200) return 200;
 
-  // Si Apple dice que el entorno es incorrecto, intenta el otro host
-  if (first.status === 403 && /Environment/i.test(first.reason || '')) {
-    const second = await sendPush({ pushToken, host: secondHost });
-    if (second.status === 200) return 200;
-    console.log('[APNs] fallback failed', second);
-    return second.status || 0;
+  if (first.status === 200) return { ...first, host: firstHost };
+
+  const reason = first.reason || '';
+  const envMismatch =
+    (first.status === 400 && /BadDeviceToken/i.test(reason)) ||
+    (first.status === 403 && /Environment|BadCertificateEnvironment/i.test(reason));
+
+  if (envMismatch) {
+    const altHost = firstHost === HOSTS.sandbox ? HOSTS.prod : HOSTS.sandbox;
+    const alt = await sendPush({ pushToken, host: altHost });
+    if (alt.status === 200 && ctx?.serial) {
+      try {
+        await require('../db/appleWalletdb').updateRegistrationEnv({
+          serial: ctx.serial, pushToken, env: (altHost === HOSTS.sandbox ? 'sandbox' : 'prod')
+        });
+      } catch {}
+    }
+    return { ...alt, host: altHost, firstTried: firstHost, firstReason: first.reason };
   }
 
-  if (first.status !== 200) {
-    console.log('[APNs] status:', first.status, 'reason:', first.reason);
-  }
-  return first.status || 0;
+  // si NO es mismatch, devuelve el primer intento (no muevas host)
+  return { ...first, host: firstHost };
 };
 
 module.exports = { notifyWallet }; 

@@ -1,82 +1,72 @@
-const businessService = require('../services/businessService'); 
+// processes/businessProcess.js
+const businessService = require('../services/businessService');
 
-// Login de negocios
-const loginBusiness = async (email, password) => {
+const safeMsg = (e) => (e?.message ?? (typeof e === 'string' ? e : 'unknown'));
+
+async function loginBusiness(email, password) {
   try {
     const user = await businessService.loginBusiness(email, password);
-    return user;
+    // Convención: service devuelve `null` si email/pass no validan
+    return user; // { id, name, email } | null
   } catch (err) {
-    throw new Error('Error en el login de negocios: ' + err.message);
+    // Propaga manteniendo mensaje, sea Error o string
+    const msg = err?.message ?? String(err);
+    throw new Error(`Error en login de negocios: ${msg}`);
   }
-};
-
-// Obtener todos los negocios
-const getAllBusinesses = async () => {
-  try {
-    const businesses = await businessService.getAllBusinesses();
-    return businesses;
-  } catch (err) {
-    throw new Error('Error al obtener los negocios: ' + err.message);
-  }
-};
-
-// Obtener un negocio por ID
-const getOneBusiness = async (id) => {
-  try {
-    const business = await businessService.getOneBusiness(id);
-    if (!business) {
-      throw new Error('Negocio no encontrado');
-    }
-    return business;
-  } catch (err) {
-    throw new Error('Error al obtener el negocio: ' + err.message);
-  }
-};
-
-// Crear un nuevo negocio
-const createBusiness = async (name, email, password, logoBuffer, created_at, updated_at) => {
-  try {
-    const newBusiness = await businessService.createBusiness(name, email, password, logoBuffer, created_at, updated_at);
-    return newBusiness;
-  } catch (err) {
-    throw new Error('Error al crear el negocio: ' + err.message);
-  }
-};
-
-// Actualizar un negocio por ID
-const updateBusiness = async (id, name, email, password, logoBuffer, created_at, updated_at) => {
-  try {
-    const updatedBusiness = await businessService.updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at);
-    return updatedBusiness;
-  } catch (err) {
-    throw new Error('Error al actualizar el negocio: ' + err.message);
-  }
-};
-
-// Eliminar un negocio por ID
-const deleteBusiness = async (id) => {
-  try {
-    const result = await businessService.deleteBusiness(id);
-    return result;
-  } catch (err) {
-    throw new Error('Error al eliminar el negocio: ' + err.message);
-  }
-};
-
-// getEmail 
-const getEmail = async (email) => {
-  const result = await businessService.getEmail(email); 
-  return result; 
 }
 
-const getCurrentDesignById = async (id) => {
-  return businessService.getCurrentDesignById(id);
-};
+// Puedes aplicar el mismo patrón al resto para evitar "…: undefined"
+async function getAllBusinesses() {
+  try {
+    return await businessService.getAllBusinesses();
+  } catch (err) {
+    throw new Error('getAllBusinesses failed', { cause: err });
+  }
+}
 
-const updateCurrentDesignById = async (designId, businessId) => {
-  return businessService.updateCurrentDesignById(designId, businessId);
-};
+async function getOneBusiness(id) {
+  try {
+    const business = await businessService.getOneBusiness(id);
+    return business; // si no existe, que service devuelva null
+  } catch (err) {
+    throw new Error('getOneBusiness failed', { cause: err });
+  }
+}
 
+async function createBusiness(name, email, password, logoBuffer, created_at, updated_at) {
+  try {
+    return await businessService.createBusiness(name, email, password, logoBuffer, created_at, updated_at);
+  } catch (err) {
+    throw new Error('createBusiness failed', { cause: err });
+  }
+}
+
+async function updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at) {
+  try {
+    return await businessService.updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at);
+  } catch (err) {
+    throw new Error('updateBusiness failed', { cause: err });
+  }
+}
+
+async function deleteBusiness(id) {
+  try {
+    return await businessService.deleteBusiness(id);
+  } catch (err) {
+    throw new Error('deleteBusiness failed', { cause: err });
+  }
+}
+
+async function getEmail(email) {
+  try {
+    return await businessService.getEmail(email);
+  } catch (err) {
+    throw new Error('getEmail failed', { cause: err });
+  }
+}
+
+const getCurrentDesignById = async (id) => businessService.getCurrentDesignById(id);
+const updateCurrentDesignById = async (designId, businessId) => businessService.updateCurrentDesignById(designId, businessId);
 
 module.exports = {
   loginBusiness,
@@ -85,7 +75,7 @@ module.exports = {
   createBusiness,
   updateBusiness,
   deleteBusiness,
-  getEmail, 
-  getCurrentDesignById, 
+  getEmail,
+  getCurrentDesignById,
   updateCurrentDesignById
 };

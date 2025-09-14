@@ -22,9 +22,17 @@ const updateUser = async (id, arg2, email, phone) => {
 };
 
 const deleteUser      = async (id) => usersDb.deleteUser(id);
-const saveUserWallet  = async ({ userId, loyalty_account_id, wallet_url }) =>
-  usersDb.saveUserWallet({ userId, loyalty_account_id, wallet_url });
+const saveUserWallet  = async ({ userId, loyalty_account_id, wallet_url }) => usersDb.saveUserWallet({ userId, loyalty_account_id, wallet_url });
 const markWalletAdded = async ({ userId }) => usersDb.markWalletAdded({ userId });
+
+const getUserDataBySerial = async ({ serial }) => {
+  try {
+    return await usersDb.getUserDataBySerial(serial);
+  } catch (error) {
+    throw new Error('Error en el servicio de obtención de usuario: ' + error.message);
+  }
+};
+
 
 module.exports = {
   getAllUsers,
@@ -34,5 +42,6 @@ module.exports = {
   updateUser,
   deleteUser,
   saveUserWallet,
-  markWalletAdded
+  markWalletAdded, 
+  getUserDataBySerial
 };

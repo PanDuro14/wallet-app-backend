@@ -157,7 +157,7 @@ function normalizeBarcodePref(pref) {
 // ---------------------- Marcador grandote para localizarlo desde lejos ---------------------------------------------------------------->
 // Crear la tarjeta 
 async function createPkPassBuffer({
-    cardCode, userName, programName,
+    cardCode, userName, programName, organizationName,
     backgroundColor, foregroundColor,
     colors = {}, fields = {}, barcode = {}, assets = {}, points, 
     appleAuthToken, webServiceBase
@@ -173,6 +173,9 @@ async function createPkPassBuffer({
   const certPem = cleanPem(fs.readFileSync(path.join(CERTS_DIR, 'pass-cert.pem')));
   const keyPem  = cleanPem(fs.readFileSync(path.join(CERTS_DIR, 'pass-key.pem')));
   const passphrase = process.env.PASS_CERT_PASSPHRASE || '';
+  const baseOrg = (typeof organizationName === 'string' && organizationName.length)
+    ? organizationName
+    : (process.env.ORG_NAME || 'Tu Empresa');
 
   try { crypto.createPublicKey(wwdrPem); }       catch (e) { throw new Error(`WWDR.pem inválido: ${e.message}`); }
   try { crypto.createPublicKey(certPem); }       catch (e) { throw new Error(`pass-cert.pem inválido: ${e.message}`); }
@@ -199,7 +202,7 @@ async function createPkPassBuffer({
   const fg = colors.foreground ? (hexToRgb(colors.foreground) || colors.foreground)
                                : (hexToRgb(foregroundColor) || foregroundColor || 'rgb(230,230,230)');
   const lc = colors.label ? (hexToRgb(colors.label) || colors.label) : undefined;
-  
+
   // Si llega "points" directo, forzamos/inyectamos en fields.primary
   if (points != null) {
     const v = String(points);
@@ -254,6 +257,7 @@ async function createPkPassBuffer({
     });
   }
 
+  const hideName = !programName || String(programName).trim() === '';
   const payload = {
     formatVersion: 1,
     passTypeIdentifier: process.env.PASS_TYPE_IDENTIFIER,
@@ -263,18 +267,27 @@ async function createPkPassBuffer({
     webServiceURL:  `${base}/api/v1/wallets`,
     authenticationToken:  appleAuthToken,
 
-    organizationName: process.env.ORG_NAME || 'Tu Empresa',
-    description: `${programName || 'Loyalty'} Card`,
-    logoText: programName || undefined,
+    organizationName: hideName ? '\u00A0' : (organizationName || process.env.ORG_NAME || 'Tu Empresa'),
+    description: hideName ? ' ' : `${programName || 'Loyalty'} Card`,
+    ...(hideName ? {} : { logoText: programName }),   // <-- deja solo esto
+
     foregroundColor: fg,
     backgroundColor: bg,
     labelColor: lc,
-    storeCard: { headerFields: [], primaryFields, secondaryFields, auxiliaryFields: [], backFields, additionalInfoFields: [] },
-    barcodes: barcodesArr,           
-    barcode: barcodesArr[0], 
 
- 
+    storeCard: {
+      headerFields: [],
+      primaryFields,
+      secondaryFields,
+      auxiliaryFields: [],
+      backFields,
+      additionalInfoFields: []
+    },
+
+    barcodes: barcodesArr,
+    barcode: barcodesArr[0]
   };
+
 
   // 4) Forzar pass.json
   await overridePassJson(modelDir, payload);

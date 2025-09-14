@@ -4,6 +4,7 @@ const userController = require('../../controller/userController');
 const { authenticateUser } = require('../../Middleware/authenticationMiddleware');
 // Rutas para las operaciones relacionadas con los usuarios
 router
+  .post('/getbyserial', userController.getUserDataBySerial)
   .get('/business/:id', userController.getOneUserByBusiness) // Obtener todos los usuarios por business
   .get('/', userController.getAllUsers) // Obtener todos los usuarios
   .get('/:id', userController.getOneUser) // Obtener un usuario por ID

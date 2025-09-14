@@ -44,7 +44,7 @@ const listRegistrations = async (req, res) => {
     return res.json({ serialNumbers, lastUpdated });
   } catch (e) {
     console.error('listRegistrations error:', e);
-    // ⚠️ No le respondas 500 a Apple/Wallet
+    
     return res.status(200).json({
       serialNumbers: [],
       lastUpdated: new Date().toUTCString()
@@ -145,6 +145,12 @@ const getPass = async (req, res) => {
       points: row.points ?? 0
     };
 
+    const programNameForPass = dj.hideProgramName ? undefined : (dj.programName || ctx.programName);
+    const orgNameForPass = dj.hideProgramName ? '\u00A0': (process.env.ORG_NAME || 'Your Org');
+
+    const dropIfBusinessName = (arr=[]) =>
+      arr.filter(f => String(f?.value||'').trim() !== String(ctx.programName||'').trim());
+
     // Colores finales
     const colors = {
       background: dj.colors?.background || bg || '#2d3436',
@@ -156,7 +162,7 @@ const getPass = async (req, res) => {
     // Flags (por defecto: mostrar ambos; si disableStrip=true, ocultamos strip)
     const wantLogo  = dj.assets?.disableLogo  === true ? false : true;  // default: true
     const wantStrip = dj.assets?.disableStrip === true ? false : false;  // default: true
-
+    
     const assets = {
       logo:  wantLogo  ? (logoBuffer  || null) : null,
       strip: wantStrip ? (stripBuffer || null) : null
@@ -195,14 +201,24 @@ const getPass = async (req, res) => {
       }
     }
 
+    if (dj.hideProgramName) {
+      fields = {
+        primary:   dropIfBusinessName(fields.primary),
+        secondary: dropIfBusinessName(fields.secondary),
+        back:      dropIfBusinessName(fields.back),
+      };
+    } 
+
     // Barcode(s): primary + additional (default QR si no viene nada)
     const bc = dj.barcode || {};
     const formats = [bc.primary, ...(bc.additional || [])].filter(Boolean);
+    
 
     const buffer = await createPkPassBuffer({
       cardCode: ctx.cardCode,
       userName: ctx.userName,
-      programName: ctx.programName,
+      programName: programNameForPass,
+      organizationName: orgNameForPass,
       points: ctx.points,
       colors,
       fields,
@@ -230,44 +246,63 @@ const getPass = async (req, res) => {
   }
 };
 
-
-
-
 // POST /v1/devices/:deviceId/registrations/:passTypeId/:serial
 // Body: { "pushToken": "xxxxx" }
 const registerDevice = async (req, res) => {
   try {
-    const deviceId = req.params.deviceId;
+    const env        = process.env.APNS_SANDBOX === 'true' ? 'sandbox' : 'prod';
+    const deviceId   = req.params.deviceId;
     const passTypeId = req.params.passTypeId;
-    const serial = cleanUuid(req.params.serial);
+    const serial     = cleanUuid(req.params.serial);
     const { pushToken } = req.body || {};
-    if (!pushToken) return res.status(400).json({ error: 'pushToken required' });
-    if (!isUuid(serial)) return res.status(400).send('invalid serial');
 
-    console.log('[registerDevice] originalUrl:', req.originalUrl);
-    console.log('[registerDevice] params:', req.params);
+    if (!pushToken)        return res.status(400).json({ error: 'pushToken required' });
+    if (!isUuid(serial))   return res.status(400).send('invalid serial');
+
+    console.log('[registerDevice][in]', {
+      url: req.originalUrl,
+      deviceId, passTypeId, serial,
+      ct: req.get('Content-Type'),
+      hasBody: !!req.body,
+      pushLen: (pushToken || '').length,
+      ua: req.get('User-Agent')
+    });
 
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
 
-    const EXPECTED = process.env.PASS_TYPE_IDENTIFIER;
+    const EXPECTED     = process.env.PASS_TYPE_IDENTIFIER;
     const userPassType = row.apple_pass_type_id || row.pass_type_id;
-    const passTypeOk = (passTypeId === EXPECTED) || (passTypeId === userPassType);
-    if (!passTypeOk) return res.sendStatus(401);
+    const passTypeOk   = (passTypeId === EXPECTED) || (passTypeId === userPassType);
+    if (!passTypeOk) return res.sendStatus(404); // ← PassKit: 404, no 401
 
     const ENFORCE = process.env.PASS_ENFORCE_AUTH === 'true';
     if (ENFORCE && !authOk(req, row)) return res.sendStatus(401);
 
-    await upsertRegistration({
+    // 1 solo upsert; devuelve true si YA existía, false si fue nuevo
+    const existed = await upsertRegistration({
       userId: row.id,
       serial: row.serial_number,
       deviceLibraryId: deviceId,
       passTypeId,
-      pushToken
+      pushToken,
+      env
     });
-    return res.sendStatus(201);
+
+    // 200 si ya estaba, 201 si lo registraste ahora
+    return res.sendStatus(existed ? 200 : 201);
+
   } catch (err) {
-    console.error('registerDevice error:', err);
+    console.error('[registerDevice][err]', {
+      msg: err?.message ?? String(err),
+      code: err?.code,
+      detail: err?.detail,
+      stack: err?.stack
+    });
+    // Si el DB lanza por duplicado, trátalo como 200 (idempotente)
+    if (err?.code === '23505' || /unique/i.test(err?.message || '')) {
+      return res.sendStatus(200);
+    }
     return res.status(500).send('Server error');
   }
 };
@@ -279,41 +314,35 @@ const bumpPoints = async (req, res) => {
     const raw = req.body?.delta;
     const delta = typeof raw === 'string' ? Number(raw.trim()) : Number(raw);
 
-    if (!isUuid(serial)) return res.status(400).send('invalid serial');
-    if (!Number.isFinite(delta)) return res.status(400).json({ error: 'invalid delta' });
+    if (!isUuid(serial))             return res.status(400).send('invalid serial');
+    if (!Number.isFinite(delta))     return res.status(400).json({ error: 'invalid delta' });
 
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
 
-    console.log('[bumpPoints] start', { serial, delta, before: row.points });
-
-    // 1) ACTUALIZA DB Y TOMA NUEVOS VALORES
     const upd = await bumpPointsBySerial(serial, delta);
     if (!upd) return res.sendStatus(404);
-    console.log('[bumpPoints] DB returned', upd);  // debe imprimir { points: N, updatedAt: '...' }
 
-    const { points: newPoints, updatedAt } = upd;
-    console.log('[bumpPoints] updated', { newPoints, updatedAt });
-
-
-    // 2) ENVÍA PUSH
     let notified = 0;
     if (process.env.APNS_ENABLED === 'true') {
-      const tokens = await listPushTokensBySerial(serial);
+      // Asegúrate que listPushTokensBySerial devuelva [{ push_token, env }]
+      const tokens = await listPushTokensBySerial(serial); // [{ push_token, env }]
       console.log('[bumpPoints] pushTokens', tokens.length);
 
       const results = await Promise.allSettled(
-        tokens.map(t => notifyWallet(t.push_token || t))
+        tokens.map(t => notifyWallet(t.push_token, t.env, { serial })) // ← pasa env
       );
 
       for (let i = 0; i < results.length; i++) {
         const r = results[i];
-        const token = tokens[i].push_token || tokens[i];
+        const token = tokens[i].push_token;
         if (r.status === 'fulfilled') {
-          const code = r.value; // 200 OK, 410 Gone, etc.
-          console.log('[bumpPoints] apns result', { token: token?.slice?.(0,8), code });
-          if (code === 200) notified++;
-          if (code === 410) {
+          const { status, reason, host } = r.value;
+          console.log('[APNs]', {
+            token: token?.slice?.(0,8), env: tokens[i].env, host, status, reason
+          });
+          if (status === 200) notified++;
+          if (status === 410) {
             try {
               await deleteRegistration({
                 passTypeId: process.env.PASS_TYPE_IDENTIFIER,
@@ -328,14 +357,12 @@ const bumpPoints = async (req, res) => {
       }
     }
 
-    return res.json({ ok: true, points: newPoints, notified });
+    return res.json({ ok: true, points: upd.points, notified });
   } catch (err) {
     console.error('bumpPoints error:', err);
     return res.status(500).json({ error: 'Server error' });
   }
 };
-
-
 
 module.exports = {
   getPass,

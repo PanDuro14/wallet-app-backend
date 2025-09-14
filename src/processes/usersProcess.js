@@ -83,6 +83,16 @@ const regenerateWallet = async (userId) => {
   return { walletUrl: url, user: updated };
 };
 
+// Función en el proceso que invoca al servicio
+const getUserDataBySerial = async ({ serial }) => {
+  try {
+    return await userService.getUserDataBySerial({ serial });
+  } catch (error) {
+    throw new Error('Error en el proceso de obtención de usuario: ' + error.message);
+  }
+};
+
+
 module.exports = {
   getAllUsers,
   getOneUser,
@@ -90,5 +100,6 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
-  regenerateWallet
+  regenerateWallet, 
+  getUserDataBySerial
 };

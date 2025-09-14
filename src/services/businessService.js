@@ -6,7 +6,8 @@ const loginBusiness = async (email, password) => {
     const user = await businessDb.loginBusiness(email, password);
     return user;
   } catch (err) {
-    throw new Error('Error en el login de negocios: ' + err.message);
+    const msg = err?.message ?? String(err);
+    throw new Error(`Error en el login de negocios: ${msg}`);
   }
 };
 

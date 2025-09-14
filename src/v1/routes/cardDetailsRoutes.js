@@ -30,5 +30,7 @@ router
 // routes/carddesign.routes.js
 router.post('/unified', carddetailController.createDesignUnified);
 router.put('/unified/:id', carddetailController.updateDesignUnified);
+router.delete('/bybusiness/:id', carddetailController.deleteByIdBusiness); 
+router.patch('/meta/:id', carddetailController.updateMeta);
 
 module.exports = router; 

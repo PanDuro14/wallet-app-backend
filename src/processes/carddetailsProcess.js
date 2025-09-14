@@ -45,6 +45,15 @@ const generateQR = async (userId, businessId) => {
   }
 };
 
+const deleteByIdBusiness = async(id) => {
+    const cardDetail = await cardDetalService.deleteByIdBusiness(id); 
+    return cardDetail; 
+}
+
+const updateMeta = async (id, partial) => {
+  return cardDetalService.updateMeta({ id, ...partial });
+};
+
 
 module.exports = {
     getAllCardDetails,
@@ -54,5 +63,7 @@ module.exports = {
     deleteCardDetails, 
     getAllCardsByBusiness, 
     getOneCardByBusiness,
-    generateQR
+    generateQR, 
+    deleteByIdBusiness, 
+    updateMeta
 }

@@ -76,7 +76,7 @@ const updateCardDetails = async(req, res) => {
         const logoBuffer = req.files['logo'] ? req.files['logo'][0].buffer : null;
         const strip_imageBuffer = req.files['strip_image'] ? req.files['strip_image'][0].buffer : null;
 
-        const updatedCardDetails = await carddetailsProcess.updateCardDetails(
+        const updatedCardDetails = await carddetailProcess.updateCardDetails(
             business_id, background_color, foreground_color, pass_type_id, terms,
             logoBuffer, strip_imageBuffer, created_at, updated_at, id
         );
@@ -154,7 +154,7 @@ const generateQR = async (req, res) => {
   }
   
   try {
-    const qrCode = await carddetailsProcess.generateQR(userId, businessId);
+    const qrCode = await carddetailProcess.generateQR(userId, businessId);
     res.status(200).json({ qrCode });
   } catch (error) {
     res.status(500).json({ error: 'Error al generar el QR' });
@@ -200,6 +200,43 @@ const updateDesignUnified = async (req, res) => {
   }
 };
 
+const deleteByIdBusiness = async (req, res) => {
+    try {
+        const { id } = req.params; 
+        if(!id) return res.status(404).json({ error: 'Negocio no encontrado'}); 
+        const response = await carddetailProcess.deleteByIdBusiness(id); 
+        res.status(200).json(response); 
+    } catch (error){
+        console.error('Error al intentar eliminar tarjetas'); 
+        return res.status(502).json({ error: error.message || 'No se pudieron eliminar las tarjetas '}); 
+    }
+}
+
+const updateMeta = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: 'id inválido' });
+    }
+
+    const { pass_type_id, terms } = req.body || {};
+    const payload = {};
+    if (typeof pass_type_id === 'string' && pass_type_id.trim()) payload.pass_type_id = pass_type_id.trim();
+    if (typeof terms === 'string' && terms.trim()) payload.terms = terms.trim();
+
+    if (!Object.keys(payload).length) {
+      return res.status(400).json({ error: 'Nada que actualizar (envía pass_type_id y/o terms)' });
+    }
+
+    const updated = await carddetailProcess.updateMeta(id, payload);
+    if (!updated) return res.status(404).json({ error: 'Tarjeta no encontrada' });
+
+    return res.status(200).json({ ok: true, id, pass_type_id: updated.pass_type_id, terms: updated.terms });
+  } catch (e) {
+    console.error('updateMeta error', e);
+    return res.status(502).json({ error: 'Error al actualizar meta' });
+  }
+};
 
 
 module.exports = {
@@ -212,5 +249,7 @@ module.exports = {
     getOneCardByBusiness,
     generateQR, 
     createDesignUnified, 
-    updateDesignUnified
+    updateDesignUnified, 
+    deleteByIdBusiness, 
+    updateMeta
 }

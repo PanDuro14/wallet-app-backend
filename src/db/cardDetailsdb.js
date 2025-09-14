@@ -135,6 +135,51 @@ const updateUnifiedDesign = async ({ id, business_id, design_json }) => {
   });
 };
 
+const deleteByIdBusiness = async(id) => {
+  return new Promise((resolve, reject) => {
+    const sql = `DELETE FROM card_details WHERE business_id = $1`;
+    pool.query(sql, [id], (error, results) => {
+        if(error) reject(error); 
+        resolve(`Tarjetas del business ${id}`); 
+    }); 
+  }); 
+}; 
+
+
+const updateMeta = async (id, { pass_type_id, terms }) => {
+  // build SET dinámico según campos enviados
+  const sets = [];
+  const vals = [];
+  let p = 1;
+
+  if (typeof pass_type_id === 'string') {
+    sets.push(`pass_type_id = $${p++}`);
+    vals.push(pass_type_id);
+  }
+  if (typeof terms === 'string') {
+    sets.push(`terms = $${p++}`);
+    vals.push(terms);
+  }
+
+  // si no vino ningún campo, no hacemos nada
+  if (sets.length === 0) return null;
+
+  // siempre actualiza updated_at
+  sets.push(`updated_at = NOW()`);
+
+  const sql = `
+    UPDATE card_details
+    SET ${sets.join(', ')}
+    WHERE id = $${p}
+    RETURNING *;
+  `;
+  vals.push(Number(id));
+
+  const { rows } = await pool.query(sql, vals);
+  return rows[0] || null;
+};
+
+
 module.exports = {
     getAllCardDetails,
     getOneCardDetails,
@@ -144,5 +189,7 @@ module.exports = {
     getAllCardsByBusiness, 
     getOneCardByBusiness, 
     createUnifiedDesign, 
-    updateUnifiedDesign
+    updateUnifiedDesign, 
+    deleteByIdBusiness, 
+    updateMeta 
 }

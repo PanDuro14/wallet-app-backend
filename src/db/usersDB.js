@@ -216,6 +216,20 @@ async function bumpPointsBySerial(serial, delta) {
   return rows[0] || null;
 }
 
+const getUserDataBySerial = async (serial) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT name, email, business_id, points
+      FROM users WHERE serial_number = $1
+    `;
+    pool.query(sql, [serial], (error, results) => {
+      if (error) return reject({ message: error.message, code: error.code });
+      resolve(results.rows[0]);
+    });
+  });
+};
+
+
 module.exports = {
   getAllUsers,
   getOneUser,
@@ -228,4 +242,5 @@ module.exports = {
   createUserFull,
   updateUserFields, 
   bumpPointsBySerial,
+  getUserDataBySerial
 };

@@ -80,6 +80,28 @@ const retryWallet = async (req, res) => {
   }
 };
 
+// Controlador que maneja la lógica de la API
+const getUserDataBySerial = async (req, res) => {
+  const { serial } = req.body;
+  if (!serial) return res.status(400).json({ error: 'El serial es necesario.' });
+
+  try {
+    const results = await userProcess.getUserDataBySerial({ serial });
+
+    if (!results) {
+      return res.status(404).json({ error: `Usuario con serial ${serial} no encontrado.` });
+    }
+
+    return res.status(200).json(results);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo obtener el usuario',
+      message: error.message,
+    });
+  }
+};
+
+
 module.exports = {
   getAllUsers,
   getOneUser,
@@ -87,5 +109,6 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
-  retryWallet
+  retryWallet, 
+  getUserDataBySerial
 };

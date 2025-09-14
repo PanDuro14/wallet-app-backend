@@ -37,6 +37,15 @@ const getOneCardByBusiness = async(business_id, id) => {
 const createUnifiedDesign = (payload) => cardDetailDb.createUnifiedDesign(payload);
 const updateUnifiedDesign = (payload) => cardDetailDb.updateUnifiedDesign(payload);
 
+const deleteByIdBusiness = async(id) => {
+    const cardDetail = await cardDetailDb.deleteByIdBusiness(id); 
+    return cardDetail; 
+}
+
+const updateMeta = ({ id, pass_type_id, terms }) => {
+  return cardDetailDb.updateMeta(id, { pass_type_id, terms });
+};
+
 module.exports = {
     getAllCardDetails,
     getOneCardDetails,
@@ -46,5 +55,7 @@ module.exports = {
     getAllCardsByBusiness, 
     getOneCardByBusiness, 
     createUnifiedDesign, 
-    updateUnifiedDesign
+    updateUnifiedDesign, 
+    deleteByIdBusiness, 
+    updateMeta
 }

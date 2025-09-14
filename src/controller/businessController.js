@@ -3,30 +3,47 @@ const businessesProcess = require('../processes/businessProcess');
 const { createBusinessWithDesignProcess, setBusinessDefaultDesignProcess } = require('../processes/businessWithDesignProcess');
 
 const loginBusiness = async (req, res) => {
-  const { email, password } = req.body;
   try {
-    const data = await businessesProcess.loginBusiness(email, password);
-
-    if (data) {
-      // Generar el token para el negocio
-      const token = jwt.sign({ businessId: data.id, name: data.name, email: data.email }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-      // Guardar el token en las cookies para permitir la persistencia de sesión
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',  
-        maxAge: 3600000,  // 1 hora de expiración
-      });
-
-      res.status(200).json({ success: true, token, data });
-    } else {
-      res.status(401).json({ success: false, message: 'Credenciales incorrectas' });
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Faltan email o password' });
     }
-  } catch (error) {
-    console.error('Error al hacer login del negocio: ', error);
-    res.status(502).json({ error: 'Error al hacer login del negocio', details: error.message });
+
+    const data = await businessesProcess.loginBusiness(email, password);
+    if (!data) {
+      return res.status(401).json({ success: false, message: 'Credenciales incorrectas' });
+    }
+
+    const token = jwt.sign(
+      { businessId: data.id, name: data.name, email: data.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // Cookie para web (especialmente Safari/iOS)
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: true,      // Fly es HTTPS
+      sameSite: 'none',  // cross-site entre fly.dev y tu frontend
+      path: '/',
+      maxAge: 60 * 60 * 1000
+      // Si usas dominio propio y subdominios, podrías añadir:
+      // domain: '.windoe.mx'
+    });
+
+    // También devolvemos el token en el JSON para apps móviles nativas
+    return res.status(200).json({ success: true, token, data });
+
+  } catch (err) {
+    console.error('[loginBusiness][controller]', {
+      message: err?.message ?? String(err),
+      cause: err?.cause?.message ?? String(err?.cause ?? ''),
+      stack: err?.stack
+    });
+    return res.status(502).json({ error: 'Error al hacer login del negocio' });
   }
 };
+
 
 // Obtener todos los negocios
 const getAllBusinesses = async (req, res) => {
@@ -55,7 +72,8 @@ const getOneBusiness = async (req, res) => {
 // Crear un nuevo negocio
 const createBusiness = async (req, res) => {
   try {
-    const { name, email, password,  created_at, updated_at } = req.body; 
+    const { name, password,  created_at, updated_at } = req.body; 
+    const email = req.body.email.toLowerCase(); 
     const logoBuffer = req.files['logo'] ? req.files['logo'][0].buffer : null;
     //const stripImageBuffer = req.files['strip_image'] ? req.files['strip_image'][0].buffer : null;
  
@@ -178,9 +196,6 @@ const setDefaultDesign = async (req, res) => {
     return res.status(e.statusCode || 500).json({ error: e.message || 'Server error' });
   }
 };
-
-
-
 
 module.exports = {
   loginBusiness,
