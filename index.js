@@ -5,8 +5,6 @@ const morgan = require('morgan');
 const app = express();
 const path = require('path');   
 
-
-
 app.use((req, res, next) => {
   res.setHeader('Vary', 'Origin'); 
   next(); 
@@ -141,8 +139,6 @@ app.get('/wallet/internal/passes/:serial/notify', async (req, res) => {
     return res.status(500).json({ error: 'server', detail: e?.message || String(e) });
   }
 });
-
-
 
 app.use('/public', express.static(path.join(process.cwd(), 'public'), {
   maxAge: '7d', etag: true, immutable: false
