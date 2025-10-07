@@ -163,24 +163,66 @@ const generateQR = async (req, res) => {
 
 // NUEVOS endpoints (no tocan multipart)
 
-
 const createDesignUnified = async (req, res) => {
   try {
     const body = req.body || {};
     if (!body.businessId) return res.status(400).json({ error: 'businessId requerido' });
 
-    // normaliza barcode para guardar limpio
+    // ====== NUEVO: Validaciones específicas para strips ======
+    if (body.cardType === 'strips') {
+      // Validar configuración mínima de strips
+      if (!body.strips) {
+        return res.status(400).json({ error: 'Configuración strips requerida para cardType "strips"' });
+      }
+      
+      if (!body.strips.rewardTitle) {
+        return res.status(400).json({ error: 'strips.rewardTitle es requerido' });
+      }
+      
+      if (!body.strips.total || body.strips.total < 1 || body.strips.total > 20) {
+        return res.status(400).json({ error: 'strips.total debe ser entre 1 y 20' });
+      }
+
+      // Valores por defecto para strips
+      body.strips.total = Number(body.strips.total);
+      body.strips.layout = body.strips.layout || 'horizontal';
+      body.strips.rewardDescription = body.strips.rewardDescription || '';
+      
+      console.log('[createDesignUnified] Configuración de strips validada:', {
+        total: body.strips.total,
+        rewardTitle: body.strips.rewardTitle,
+        layout: body.strips.layout,
+        hasOnImage: !!body.strips.stripImageOn,
+        hasOffImage: !!body.strips.stripImageOff
+      });
+    }
+
+    // normaliza barcode para guardar limpio (tu código original)
     if (body.barcode) body.barcode = normalizeBarcodeSpec(body.barcode);
+    
     const saved = await carddetailService.createUnifiedDesign({
       business_id: Number(body.businessId),
       design_json: body
     });
-    return res.status(201).json({ id: saved.id, design: saved.design_json });
+    
+    return res.status(201).json({ 
+      id: saved.id, 
+      design: saved.design_json,
+      // Información adicional para strips
+      ...(body.cardType === 'strips' ? {
+        strips_info: {
+          total: body.strips.total,
+          reward: body.strips.rewardTitle,
+          has_custom_images: !!(body.strips.stripImageOn && body.strips.stripImageOff)
+        }
+      } : {})
+    });
   } catch (e) {
     console.error('createDesignUnified', e);
     return res.status(400).json({ error: e.message || 'Invalid design body' });
   }
 };
+
 
 const updateDesignUnified = async (req, res) => {
   try {
@@ -239,6 +281,101 @@ const updateMeta = async (req, res) => {
 };
 
 
+// ====== NUEVO: Función para crear design con imágenes subidas ======
+const createDesignWithStripsImages = async (req, res) => {
+  try {
+    // Parsear el JSON del campo 'design' 
+    let designData;
+    try {
+      designData = JSON.parse(req.body.design || '{}');
+    } catch (parseError) {
+      return res.status(400).json({ error: 'Campo design debe ser JSON válido' });
+    }
+
+    if (!designData.businessId) {
+      return res.status(400).json({ error: 'businessId requerido en design' });
+    }
+
+    // Procesar imágenes subidas
+    const stripImageOnBuffer = req.files['strip_image_on']?.[0]?.buffer;
+    const stripImageOffBuffer = req.files['strip_image_off']?.[0]?.buffer;
+
+    console.log('[createDesignWithStripsImages] Imágenes recibidas:', {
+      strip_on: !!stripImageOnBuffer,
+      strip_off: !!stripImageOffBuffer,
+      strip_on_size: stripImageOnBuffer?.length || 0,
+      strip_off_size: stripImageOffBuffer?.length || 0
+    });
+
+    // Inicializar configuración de strips si no existe
+    if (!designData.strips) {
+      designData.strips = {};
+    }
+
+    // Convertir imágenes a base64 y agregarlas al design
+    if (stripImageOnBuffer) {
+      try {
+        const base64On = stripImageOnBuffer.toString('base64');
+        designData.strips.stripImageOn = `data:image/png;base64,${base64On}`;
+        console.log('[createDesignWithStripsImages] Imagen ON convertida:', base64On.length, 'chars');
+      } catch (convertError) {
+        console.error('Error convirtiendo imagen ON:', convertError);
+        return res.status(400).json({ error: 'Error procesando strip_image_on' });
+      }
+    }
+
+    if (stripImageOffBuffer) {
+      try {
+        const base64Off = stripImageOffBuffer.toString('base64');
+        designData.strips.stripImageOff = `data:image/png;base64,${base64Off}`;
+        console.log('[createDesignWithStripsImages] Imagen OFF convertida:', base64Off.length, 'chars');
+      } catch (convertError) {
+        console.error('Error convirtiendo imagen OFF:', convertError);
+        return res.status(400).json({ error: 'Error procesando strip_image_off' });
+      }
+    }
+
+    // Forzar cardType a strips
+    designData.cardType = 'strips';
+
+    // Validaciones mínimas (reutilizando lógica)
+    if (!designData.strips.rewardTitle) {
+      return res.status(400).json({ error: 'strips.rewardTitle es requerido' });
+    }
+
+    if (!designData.strips.total) {
+      designData.strips.total = 10; // Default
+    }
+
+    designData.strips.total = Number(designData.strips.total);
+    designData.strips.layout = designData.strips.layout || 'horizontal';
+
+    // Guardar usando el mismo servicio
+    const saved = await carddetailService.createUnifiedDesign({
+      business_id: Number(designData.businessId),
+      design_json: designData
+    });
+
+    return res.status(201).json({ 
+      id: saved.id, 
+      design: saved.design_json,
+      strips_info: {
+        total: designData.strips.total,
+        reward: designData.strips.rewardTitle,
+        has_custom_images: !!(stripImageOnBuffer && stripImageOffBuffer),
+        images_processed: {
+          strip_on: !!stripImageOnBuffer,
+          strip_off: !!stripImageOffBuffer
+        }
+      }
+    });
+
+  } catch (e) {
+    console.error('createDesignWithStripsImages error:', e);
+    return res.status(500).json({ error: 'Error al crear diseño con imágenes de strips' });
+  }
+};
+
 module.exports = {
     getAllCardDetails,
     getOneCardDetails,
@@ -251,5 +388,6 @@ module.exports = {
     createDesignUnified, 
     updateDesignUnified, 
     deleteByIdBusiness, 
-    updateMeta
+    updateMeta, 
+    createDesignWithStripsImages
 }

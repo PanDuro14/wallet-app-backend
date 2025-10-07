@@ -32,5 +32,12 @@ router.post('/unified', carddetailController.createDesignUnified);
 router.put('/unified/:id', carddetailController.updateDesignUnified);
 router.delete('/bybusiness/:id', carddetailController.deleteByIdBusiness); 
 router.patch('/meta/:id', carddetailController.updateMeta);
+router.post('/unified/with-strips', 
+  upload.fields([
+    { name: 'strip_image_on', maxCount: 1 },
+    { name: 'strip_image_off', maxCount: 1 }
+  ]), 
+  carddetailController.createDesignWithStripsImages
+);
 
 module.exports = router; 

@@ -44,24 +44,55 @@ function pickAnyBuffer(obj, keys = []) {
 }
 // ya de aqui en delante no hay helpers xd
 
+// processes/walletProcess.js (o donde tengas loadBrandAssets)
 async function loadBrandAssets(businessId) {
   const cdRes  = await carddetailsProcess.getOneCardByBusiness(businessId); // puede ser obj o array
-  const bizRes = await businessesProcess.getOneBusiness(businessId);        
+  const bizRes = await businessesProcess.getOneBusiness(businessId);
 
   const cd  = firstOrNull(cdRes);
   const biz = firstOrNull(bizRes);
 
-  // En businesses la columna se llama "logo"
+  // Logo (por si cambia el nombre de columna)
   const logoBuffer =
     pickAnyBuffer(cd,  ['logoBuffer','logo','logo_image','image','logo_png']) ||
     pickAnyBuffer(biz, ['logo','logoBuffer','image','logo_png']) || null;
 
-  const stripBuffer =
-    pickAnyBuffer(cd, ['strip_imageBuffer','stripBuffer','strip','strip_image','strip_png']) || null;
+  // ===== STRIPS ON/OFF - VERSIÓN AMPLIADA =====
+  // Prioridad: 
+  // 1. Primero busca en CardDetail (por si el diseño específico tiene strips)
+  // 2. Luego busca en Business con los nombres exactos de tu DB
+  // 3. Finalmente busca con nombres alternativos
+  
+  const stripOnBuffer =
+    pickAnyBuffer(cd,  ['strip_on','stripOn','strip_on_image','stripOnImage','strip_on_buffer','stripOnBuffer','stamp_on','stampOn']) ||
+    pickAnyBuffer(biz, ['strip_image_on']) || // ← TU CAMPO EXACTO DE LA DB
+    pickAnyBuffer(biz, ['strip_on','stripOn','strip_on_image','stripOnImage','strip_on_buffer','stripOnBuffer','stamp_on','stampOn']) ||
+    null;
 
-  const programName = (cd && cd.program_name) || (biz && biz.name) || 'Loyalty';
-  const bg = (cd && cd.background_color) || (biz && biz.background_color) || '#2d3436';
-  const fg = (cd && cd.foreground_color) || (biz && biz.foreground_color) || '#E6E6E6';
+  const stripOffBuffer =
+    pickAnyBuffer(cd,  ['strip_off','stripOff','strip_off_image','stripOffImage','strip_off_buffer','stripOffBuffer','stamp_off','stampOff']) ||
+    pickAnyBuffer(biz, ['strip_image_off']) || // ← TU CAMPO EXACTO DE LA DB  
+    pickAnyBuffer(biz, ['strip_off','stripOff','strip_off_image','stripOffImage','strip_off_buffer','stripOffBuffer','stamp_off','stampOff']) ||
+    null;
+
+  // Retro-compat: si solo hay un strip "genérico", lo exponemos también
+  const stripBuffer =
+    pickAnyBuffer(cd,  ['strip_imageBuffer','stripBuffer','strip','strip_image','strip_png']) ||
+    pickAnyBuffer(biz, ['strip_imageBuffer','stripBuffer','strip','strip_image','strip_png']) ||
+    null;
+
+  // Colores/nombre
+  const programName =
+    (cd && (cd.program_name || cd.programName)) ||
+    (biz && biz.name) || 'Loyalty';
+
+  const bg = (cd && (cd.background_color || cd.bg || cd.backgroundColor)) ||
+             (biz && (biz.background_color || biz.bg || biz.backgroundColor)) ||
+             '#2d3436';
+
+  const fg = (cd && (cd.foreground_color || cd.fg || cd.foregroundColor)) ||
+             (biz && (biz.foreground_color || biz.fg || biz.foregroundColor)) ||
+             '#E6E6E6';
 
   console.log('[Apple Assets]', {
     businessId,
@@ -69,25 +100,52 @@ async function loadBrandAssets(businessId) {
     isCdArray: Array.isArray(cdRes),
     hasLogo: !!logoBuffer,
     logoLen: logoBuffer?.length || 0,
-    hasStrip: !!stripBuffer
+    hasStripGeneric: !!stripBuffer,
+    hasStripOn: !!stripOnBuffer,
+    hasStripOff: !!stripOffBuffer,
+    // ===== NUEVO LOGGING =====
+    stripOnLen: stripOnBuffer?.length || 0,
+    stripOffLen: stripOffBuffer?.length || 0,
+    stripGenericLen: stripBuffer?.length || 0
   });
 
-  return { logoBuffer, stripBuffer, programName, bg, fg };
+  // ===== RETURN AMPLIADO - MANTIENE COMPATIBILIDAD =====
+  return { 
+    logoBuffer, 
+    stripOnBuffer, 
+    stripOffBuffer, 
+    stripBuffer, 
+    programName, 
+    bg, 
+    fg,
+    // ===== NUEVOS ALIAS PARA COMPATIBILIDAD CON EL CONTROLADOR =====
+    stripImageOn: stripOnBuffer,   // ← Alias para el controlador
+    stripImageOff: stripOffBuffer  // ← Alias para el controlador
+  };
 }
+
 
 async function issueAppleWalletPkpass(dto) {
   const { businessId } = dto;
-  const { logoBuffer, stripBuffer, programName: pn, bg, fg } = await loadBrandAssets(businessId);
+  const { logoBuffer, stripBuffer, stripOnBuffer, stripOffBuffer, programName: pn, bg, fg } = await loadBrandAssets(businessId);
 
   const assets = { ...dto.assets };
   if (!assets.logo  && logoBuffer)  assets.logo  = logoBuffer;
   if (!assets.strip && stripBuffer) assets.strip = stripBuffer;
 
+  // Asignamos stripOnBuffer y stripOffBuffer a los assets
+  if (stripOnBuffer && stripOffBuffer) {
+    assets.stripOn = stripOnBuffer;
+    assets.stripOff = stripOffBuffer;
+  } else {
+    console.log('[Apple Wallet] Falta alguna de las imágenes de strip.');
+  }
+
   const colors = dto.colors || { background: bg, foreground: fg };
 
   const effectivePoints =
-    dto.points ??
-    findPointsInFields(dto.fields) ??
+    dto.points ?? 
+    findPointsInFields(dto.fields) ?? 
     0;
 
   return await createPkPassBuffer({

@@ -102,57 +102,123 @@ const pickDesign = async (business_id, card_detail_id) => {
 };
 
 
-const createUserAndIssueProcess = async ({ business_id, name, email, phone, card_detail_id, points }) => {
-  const initial_points = 0; 
+// En src/processes/onboardingProcess.js
+// Modificar la función createUserAndIssueProcess
+
+const createUserAndIssueProcess = async ({ 
+  business_id, name, email, phone, card_detail_id, points,
+  variant,
+  // Nuevos parámetros para strips unificado
+  cardType,
+  stripsRequired = 10,
+  rewardTitle,
+  rewardDescription
+}) => {
+  
+  // ====== DETERMINAR TIPO DE TARJETA ======
+  let finalCardType = 'points'; // Default es points
+  
+  if (cardType) {
+    // Nuevo sistema: cardType directo
+    finalCardType = cardType;
+  } else if (variant) {
+    // Sistema existente: mapear variant a cardType
+    finalCardType = variant === 'strips' ? 'strips' : 'points';
+  }
+  console.log('[Variante recibida: 1 ] Variante en finalCardType', finalCardType); 
+
+  console.log('[createUserAndIssue] Tipo de tarjeta determinado:', {
+    input_variant: variant,
+    input_cardType: cardType,
+    final_cardType: finalCardType
+  });
+
+  // Inicializar los puntos si es "points"
+  const initial_points = finalCardType === 'points' ? (points || 0) : 0;
+
   // 1) Validaciones de negocio y diseño
   const biz = await ensureBusiness(business_id);
   const design = await pickDesign(business_id, card_detail_id);
 
-  // saneo básico
-  name  = (name  ?? '').toString().trim();
+  // Saneamiento básico
+  name  = (name ?? '').toString().trim();
   email = (email ?? '').toString().trim();
   phone = (phone ?? '').toString().trim() || null;
 
-  // 2) Identificadores del pase (defínelos ANTES de validar longitudes)
-  const serial_number      = crypto.randomUUID();
-  const apple_auth_token   = crypto.randomBytes(16).toString('hex');
+  // 2) Identificadores del pase
+  const serial_number = crypto.randomUUID();
+  const apple_auth_token = crypto.randomBytes(16).toString('hex');
   
-  // apple_pass_type_id 
-  const typeIdFromEnv = process.env.PASS_TYPE_IDENTIFIER; // ej: pass.mx.windoe.loyalty
+  const typeIdFromEnv = process.env.PASS_TYPE_IDENTIFIER;
   if (!typeIdFromEnv || !/^pass\./.test(typeIdFromEnv)) {
     throw new Error('PASS_TYPE_IDENTIFIER no configurado o inválido (debe iniciar con "pass.")');
   }
-  const apple_pass_type_id = typeIdFromEnv; // ← SIEMPRE el real, no el del diseño
-
+  const apple_pass_type_id = typeIdFromEnv;
 
   const loyalty_account_id = `CARD-${business_id}-${serial_number.slice(0, 8).toUpperCase()}`;
 
-  // 3) Validaciones de longitud (evita 22001 con mensaje claro)
+  // Validaciones de longitud
   const assertLen = (v, n, field) => {
     if (v != null && String(v).length > n) throw new Error(`${field} demasiado largo (${String(v).length} > ${n})`);
   };
-  assertLen(name,               255, 'name');
-  assertLen(email,              255, 'email');
-  assertLen(phone,               32, 'phone');
+  assertLen(name, 255, 'name');
+  assertLen(email, 255, 'email');
+  assertLen(phone, 32, 'phone');
   assertLen(apple_pass_type_id, 255, 'apple_pass_type_id');
-  assertLen(loyalty_account_id,  64, 'loyalty_account_id');
+  assertLen(loyalty_account_id, 64, 'loyalty_account_id');
 
-  // 4) Crear usuario completo en DB (con payload OBJETO)
-  const user = await usersService.createUser({
+  // 3) Preparar los datos para crear el usuario
+  const userData = {
     name,
     email,
     phone,
     business_id,
-    points: points || initial_points,
+    points: initial_points,
     serial_number,
     apple_auth_token,
     apple_pass_type_id,
     card_detail_id: design.id,
     loyalty_account_id,
-  });
-  console.log("[PROCESS] Usuario creado:", { id: user.id, email: user.email });
+    // Campos nuevos para strips - IMPORTANTE: asegurar que se guarden
+    card_type: finalCardType
+  };
 
-  // 5) Emitir artefactos Wallet
+  // Solo agregar campos de strips si es necesario
+  if (finalCardType === 'strips') {
+    userData.strips_collected = 0;
+    userData.strips_required = stripsRequired;
+    userData.reward_title = rewardTitle;
+    userData.reward_description = rewardDescription;
+    userData.reward_unlocked = false;
+  }
+
+  // Si viene variant, agregarlo para compatibilidad
+  if (variant) {
+    userData.design_variant = variant;
+  }
+
+  console.log('[createUserAndIssue] userData preparado:', {
+    card_type: userData.card_type,
+    design_variant: userData.design_variant,
+    strips_required: userData.strips_required,
+    reward_title: userData.reward_title
+  });
+
+  // 4) Crear usuario en DB
+  const user = await usersService.createUser(userData);
+  console.log("[PROCESS] Usuario creado:", { 
+    id: user.id, 
+    email: user.email, 
+    card_type: user.card_type,
+    strips_required: user.strips_required 
+  });
+
+  // VERIFICAR que el usuario se creó correctamente
+  if (finalCardType === 'strips' && !user.card_type) {
+    console.error('[CRITICAL] Usuario creado sin card_type, revisar usersService.createUser');
+  }
+
+  // 5) Emitir artefactos de Wallet
   const google_save_url = await walletProcess.issueGoogleWalletLink({
     cardCode: serial_number,
     userName: user.name,
@@ -164,15 +230,15 @@ const createUserAndIssueProcess = async ({ business_id, name, email, phone, card
   const typeId = process.env.PASS_TYPE_IDENTIFIER; 
   const apple_pkpass_url = `${base}/api/v1/wallets/v1/passes/${encodeURIComponent(typeId)}/${serial_number}`;
 
-  // 6) Guardar URL de Google (usa helper ya existente)
+  // 6) Guardar URL de Google Wallet
   await usersService.saveUserWallet({
     userId: user.id,
     loyalty_account_id,
     wallet_url: google_save_url
   });
 
-  // 7) Respuesta
-  return {
+  // Respuesta final
+  const response = {
     user: {
       id: user.id,
       business_id: user.business_id,
@@ -185,6 +251,11 @@ const createUserAndIssueProcess = async ({ business_id, name, email, phone, card
       apple_pass_type_id,
       card_detail_id: design.id,
       loyalty_account_id,
+      // Nuevos campos de strips
+      card_type: finalCardType,
+      // IMPORTANTE: usar finalCardType en lugar de user.card_type
+      // por si acaso el DB no lo guardó correctamente
+      variant: finalCardType  // Agregar este campo para compatibilidad
     },
     wallet: {
       google_save_url,
@@ -192,7 +263,25 @@ const createUserAndIssueProcess = async ({ business_id, name, email, phone, card
       apple_auth_header: `ApplePass ${apple_auth_token}`,
     },
   };
+
+  // Agregar información de strips si es necesario
+  if (finalCardType === 'strips') {
+    response.user.strips_collected = user.strips_collected || 0;
+    response.user.strips_required = user.strips_required || stripsRequired;
+    response.user.reward_title = user.reward_title || rewardTitle;
+    response.user.reward_description = user.reward_description || rewardDescription;
+    response.strips_info = {
+      required: user.strips_required || stripsRequired,
+      collected: user.strips_collected || 0,
+      reward: user.reward_title || rewardTitle,
+      isComplete: false
+    };
+  }
+  
+  console.log('[Variante recibida: ] Variante en finalCardType', finalCardType); 
+  return response;
 };
+
 
 
 const changeUserDesignProcess = async ({ user_id, card_detail_id }) => {

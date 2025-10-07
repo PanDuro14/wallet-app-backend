@@ -125,11 +125,155 @@ async function updateRegistrationEnv({ serial, pushToken, env }) {
   await pool.query(sql, [serial, pushToken, env]);
 }
 
+// AGREGAR estas funciones al final de tu archivo appleWalletdb.js
+
+/** Otorgar un strip a un usuario (con transaction) */
+async function grantStripBySerial(serial, stripNumber) {
+  // Iniciar transacción
+  await pool.query('BEGIN');
+  
+  try {
+    // 1. Obtener usuario
+    const userQuery = `
+      SELECT id, strips_collected, strips_required, reward_title, name, card_type
+      FROM public.users 
+      WHERE serial_number = $1
+    `;
+    const userResult = await pool.query(userQuery, [serial]);
+    const user = userResult.rows[0];
+    
+    if (!user) {
+      await pool.query('ROLLBACK');
+      return { success: false, error: 'Usuario no encontrado' };
+    }
+
+    if (user.card_type !== 'strips') {
+      await pool.query('ROLLBACK');
+      return { success: false, error: 'Esta tarjeta no es de tipo strips' };
+    }
+
+    // 2. Verificar si ya tiene este strip
+    const existingQuery = 'SELECT id FROM user_strips_log WHERE user_id = $1 AND strip_number = $2';
+    const existing = await pool.query(existingQuery, [user.id, stripNumber]);
+    
+    if (existing.rows.length > 0) {
+      await pool.query('ROLLBACK');
+      return { 
+        success: false, 
+        error: 'Strip ya obtenido',
+        current: {
+          strips_collected: user.strips_collected,
+          strips_required: user.strips_required || 10
+        }
+      };
+    }
+
+    // 3. Verificar si ya completó
+    if (user.strips_collected >= (user.strips_required || 10)) {
+      await pool.query('ROLLBACK');
+      return {
+        success: false,
+        error: 'Colección ya completada',
+        current: {
+          strips_collected: user.strips_collected,
+          strips_required: user.strips_required || 10
+        }
+      };
+    }
+
+    // 4. Registrar el nuevo strip
+    await pool.query(
+      'INSERT INTO user_strips_log (user_id, strip_number) VALUES ($1, $2)',
+      [user.id, stripNumber]
+    );
+
+    // 5. Actualizar contador
+    const updateQuery = `
+      UPDATE users 
+      SET strips_collected = strips_collected + 1,
+          reward_unlocked = CASE 
+            WHEN strips_collected + 1 >= COALESCE(strips_required, 10) THEN true 
+            ELSE reward_unlocked 
+          END,
+          updated_at = NOW() AT TIME ZONE 'UTC'
+      WHERE id = $1 
+      RETURNING strips_collected, strips_required, reward_unlocked, reward_title, name, updated_at
+    `;
+    
+    const updatedResult = await pool.query(updateQuery, [user.id]);
+    const updated = updatedResult.rows[0];
+
+    await pool.query('COMMIT');
+    
+    const isComplete = updated.reward_unlocked;
+    const justCompleted = isComplete && (updated.strips_collected === (updated.strips_required || 10));
+
+    return {
+      success: true,
+      data: {
+        strips_collected: updated.strips_collected,
+        strips_required: updated.strips_required || 10,
+        strip_number: stripNumber,
+        isComplete,
+        justCompleted,
+        reward_title: updated.reward_title,
+        userName: updated.name,
+        updatedAt: updated.updated_at
+      }
+    };
+
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    throw error;
+  }
+}
+
+/** Obtener strips de un usuario */
+async function getUserStrips(userId) {
+  const sql = `
+    SELECT strip_number, collected_at
+    FROM user_strips_log
+    WHERE user_id = $1
+    ORDER BY strip_number
+  `;
+  const { rows } = await pool.query(sql, [userId]);
+  return rows;
+}
+
+/** Función auxiliar para eliminar registraciones (reutilizada de tu lógica) */
+async function deleteRegistration({ deviceId, passTypeId, serial, pushToken }) {
+  let sql, params;
+  
+  if (pushToken) {
+    // Eliminar por token específico
+    sql = `
+      DELETE FROM public.apple_wallet_registrations
+      WHERE pass_type_id = $1 AND serial_number = $2 AND push_token = $3
+    `;
+    params = [passTypeId, serial, pushToken];
+  } else if (deviceId) {
+    // Eliminar por device + serial
+    sql = `
+      DELETE FROM public.apple_wallet_registrations
+      WHERE device_library_id = $1 AND pass_type_id = $2 AND serial_number = $3
+    `;
+    params = [deviceId, passTypeId, serial];
+  } else {
+    throw new Error('deleteRegistration: deviceId o pushToken requerido');
+  }
+  
+  const { rowCount } = await pool.query(sql, params);
+  return rowCount > 0;
+}
+
 module.exports = {
   findUserPassBySerial,
   upsertRegistration,
   listPushTokensBySerial,
   bumpPointsBySerial,
   listUpdatedSerialsSince, 
-  updateRegistrationEnv
+  updateRegistrationEnv, 
+  grantStripBySerial,
+  getUserStrips,
+  deleteRegistration
 };

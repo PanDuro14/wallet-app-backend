@@ -7,7 +7,7 @@ const getOneUserByBusiness = async(id) => usersDb.getOneUserByBusiness(id);
 // acepta (obj) o (name,email,phone,business_id,points,serial_number)
 const createUser = async (...args) => {
   if (args.length === 1 && args[0] && typeof args[0] === 'object') {
-    return usersDb.createUserFull(args[0]); // NUEVO
+    return usersDb.createUserFull(args[0]); 
   }
   const [name, email, phone, business_id, points = 0, serial_number = null] = args;
   return usersDb.createUser(name, email, phone, business_id, points, serial_number);

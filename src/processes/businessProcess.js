@@ -33,17 +33,17 @@ async function getOneBusiness(id) {
   }
 }
 
-async function createBusiness(name, email, password, logoBuffer, created_at, updated_at) {
+async function createBusiness(name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) {
   try {
-    return await businessService.createBusiness(name, email, password, logoBuffer, created_at, updated_at);
+    return await businessService.createBusiness(name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at);
   } catch (err) {
     throw new Error('createBusiness failed', { cause: err });
   }
 }
 
-async function updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at) {
+async function updateBusiness(id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) {
   try {
-    return await businessService.updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at);
+    return await businessService.updateBusiness(id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at);
   } catch (err) {
     throw new Error('updateBusiness failed', { cause: err });
   }

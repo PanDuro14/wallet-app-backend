@@ -61,18 +61,18 @@ const getOneBusiness  = async (id) => {
 };
 
 // Crear nuevo negocio con contraseña cifrada
-const createBusiness = async (name, email, password, logoBuffer, created_at, updated_at) => {
+const createBusiness = async (name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) => {
   return new Promise(async (resolve, reject) => {
     try {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
       const sql = `
         INSERT INTO businesses 
-          (name, email, password, logo, created_at, updated_at) 
-        VALUES ($1, $2, $3, $4, $5, $6) 
+          (name, email, password, logo, strip_image_on, strip_image_off, created_at, updated_at) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
         RETURNING *`;
       
-      pool.query(sql, [name, email, hashedPassword, logoBuffer, created_at, updated_at], (error, results) => {
+      pool.query(sql, [name, email, hashedPassword, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at], (error, results) => {
         if (error) return reject(error);
         resolve(results.rows[0]); 
       });
@@ -83,30 +83,45 @@ const createBusiness = async (name, email, password, logoBuffer, created_at, upd
 };
 
 // Actualizar negocio por ID
-const updateBusiness = async (id, name, email, password, logoBuffer, created_at, updated_at) => {
+const updateBusiness = async (id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) => {
   return new Promise((resolve, reject) => {
     try {
       const sql = `UPDATE businesses
-        SET name = $1, email = $2, password = $3, logo = $4, created_at = $5, updated_at = $6
-        WHERE id = $7`;
-      
-        pool.query(sql, [name, email, password, logoBuffer, created_at, updated_at, id], (error, results)); 
-        if (error) return reject(error); 
-        resolve('Business actualizado'); 
-    } catch (error) {
-      console.error(error); 
+        SET name = $1, email = $2, password = $3, logo = $4, strip_image_on = $5, strip_image_off = $6, created_at = $7, updated_at = $8
+        WHERE id = $9`;
+
+      pool.query(sql, [name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at, id], (error, results) => {
+        if (error) {
+          console.error('Error al actualizar el negocio:', error);
+          return reject(error); 
+        }
+        resolve('Business actualizado');
+      });
+
+    } catch (err) {
+      console.error('Error en la ejecución de updateBusiness:', err);
+      reject(err);
     }
-  }); 
+  });
 }
+
 
 // Eliminar un negocio por ID
 const deleteBusiness = async (id) => {
   return new Promise((resolve, reject) => {
-    const sql = 'DELETE FROM businesses WHERE id = $1';
-    pool.query(sql, [id], (error, results) => {
-      if (error) return reject(error);
-      resolve('Negocio eliminado');
-    });
+    try {
+      const sql = 'DELETE FROM card_details WHERE business_id = $1';
+      pool.query(sql, [id], (error, results) => {
+        if (error) return reject(error);
+        resolve('Negocio eliminado');
+      });
+    } finally {
+      const sql = 'DELETE FROM businesses WHERE id = $1';
+      pool.query(sql, [id], (error, results) => {
+        if (error) return reject(error);
+        resolve('Negocio eliminado');
+      });
+    }
   });
 };
 

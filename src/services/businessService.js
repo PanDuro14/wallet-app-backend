@@ -35,9 +35,9 @@ const getOneBusiness = async (id) => {
 };
 
 // Crear un nuevo negocio
-const createBusiness = async (name, email, password, logoBuffer, created_at, updated_at) => {
+const createBusiness = async (name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) => {
   try {
-    const newBusiness = await businessDb.createBusiness(name, email, password, logoBuffer, created_at, updated_at);
+    const newBusiness = await businessDb.createBusiness(name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at);
     return newBusiness;
   } catch (err) {
     throw new Error('Error al crear el negocio: ' + err.message);
@@ -45,9 +45,9 @@ const createBusiness = async (name, email, password, logoBuffer, created_at, upd
 };
 
 // Actualizar un negocio por ID
-const updateBusiness = async (id, name, email, password, logoBuffer, created_at, updated_at) => {
+const updateBusiness = async (id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) => {
   try {
-    const updatedBusiness = await businessDb.updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at);
+    const updatedBusiness = await businessDb.updateBusiness(id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at);
     return updatedBusiness;
   } catch (err) {
     throw new Error('Error al actualizar el negocio: ' + err.message);
@@ -70,11 +70,11 @@ const getEmail = async (email) => {
 }
 
 const getCurrentDesignById = async (id) => {
-  return businessDb.getCurrentDesignById(id);          // 👈 pasa número, no objeto
+  return businessDb.getCurrentDesignById(id);          
 };
 
 const updateCurrentDesignById = async (designId, businessId) => {
-  return businessDb.updateCurrentDesignById(designId, businessId); // 👈 nombre correcto y números
+  return businessDb.updateCurrentDesignById(designId, businessId); 
 };
 
 

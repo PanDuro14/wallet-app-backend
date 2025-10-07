@@ -18,10 +18,14 @@ router
   .get('/', businessController.getAllBusinesses)
   .get('/:id', businessController.getOneBusiness)
   .post('/', upload.fields([
-    {name: 'logo', maxCount: 1}]), 
+    { name: 'logo', maxCount: 1}, 
+    { name: 'strip_image_on', maxCount: 1 }, 
+    { name: 'strip_image_off', maxCount: 1 }]), 
     businessController.createBusiness)
   .put('/:id', upload.fields([
-    {name: 'logo', maxCount: 1}]), 
+    { name: 'logo', maxCount: 1}, 
+    { name: 'strip_image_on', maxCount: 1 }, 
+    { name: 'strip_image_off', maxCount: 1 }]), 
     businessController.updateBusiness)
   .delete('/:id', businessController.deleteBusiness)
   .get('/current-desing/:id', businessController.getCurrentDesignById)

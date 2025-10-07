@@ -61,18 +61,185 @@ const getOneUserByBusiness = async(id) => {
 }
 
 // Crear un nuevo usuario
-const createUser = async (name, email, phone, business_id, points = 0, serial_number = null) => {
-  serial_number = serial_number || uuidv4();
-  return new Promise((resolve, reject) => {
-    const sql = `
-      INSERT INTO users (name, email, phone, business_id, points, serial_number)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *`;
-    pool.query(sql, [name, email, phone, business_id, points, serial_number], (error, results) => {
-      if (error) return reject(error);
-      resolve(results.rows[0]);
-    });
+// En src/services/usersService.js
+// Modificar la función createUser
+
+// Crear un nuevo usuario con Promise
+// En src/services/usersService.js
+
+const createUser = (userData) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const {
+        name, email, phone, business_id, points,
+        serial_number, apple_auth_token, apple_pass_type_id, 
+        card_detail_id, loyalty_account_id,
+        // Campos que SÍ existen en tu DB
+        strips_collected,
+        strips_required,
+        reward_unlocked
+        // Nota: card_type y reward_title NO están en tu DB
+      } = userData;
+
+      console.log('[usersService.createUser] Campos recibidos:', {
+        name,
+        email,
+        business_id,
+        card_detail_id,
+        strips_collected,
+        strips_required,
+        reward_unlocked
+      });
+
+      // Campos base obligatorios
+      let fields = [
+        'name', 'email', 'phone', 'business_id', 'points',
+        'serial_number', 'apple_auth_token', 'apple_pass_type_id', 
+        'card_detail_id', 'loyalty_account_id'
+      ];
+      
+      let values = [
+        name, 
+        email, 
+        phone, 
+        business_id, 
+        points || 0,
+        serial_number, 
+        apple_auth_token, 
+        apple_pass_type_id, 
+        card_detail_id, 
+        loyalty_account_id
+      ];
+
+      // Agregar campos opcionales dinámicamente (solo los que existen en tu DB)
+      const optionalFields = [
+        { key: 'strips_collected', value: strips_collected || 0 }, // Siempre 0 al inicio
+        { key: 'strips_required', value: strips_required }, // Del request (8 en tu caso)
+        { key: 'reward_unlocked', value: reward_unlocked || false }
+      ];
+
+      optionalFields.forEach(field => {
+        if (field.value !== undefined && field.value !== null) {
+          fields.push(field.key);
+          values.push(field.value);
+        }
+      });
+
+      // Construir placeholders ($1, $2, etc.)
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+      
+      const query = `
+        INSERT INTO users (${fields.join(', ')})
+        VALUES (${placeholders})
+        RETURNING *
+      `;
+
+      console.log('[usersService.createUser] Query construido:', {
+        fieldsCount: fields.length,
+        valuesCount: values.length,
+        fields: fields,
+        sampleValues: values.slice(0, 5), // Primeros 5 valores para debug
+        hasStripsData: !!(strips_required || strips_collected)
+      });
+
+      // Validaciones antes de ejecutar
+      if (!name || !email || !business_id) {
+        return reject(new Error('Campos obligatorios faltantes: name, email, business_id'));
+      }
+
+      if (fields.length !== values.length) {
+        return reject(new Error(`Mismatch fields/values: ${fields.length} fields vs ${values.length} values`));
+      }
+
+      // Ejecutar query con pool de conexiones
+      pool.query(query, values, (error, results) => {
+        if (error) {
+          console.error('[usersService.createUser] Database error:', {
+            message: error.message,
+            code: error.code,
+            detail: error.detail,
+            constraint: error.constraint
+          });
+          return reject(error);
+        }
+
+        if (!results.rows || results.rows.length === 0) {
+          console.error('[usersService.createUser] No rows returned');
+          return reject(new Error('No user created - no rows returned'));
+        }
+
+        const createdUser = results.rows[0];
+        
+        console.log('[usersService.createUser] ✅ Usuario creado exitosamente:', {
+          id: createdUser.id,
+          serial_number: createdUser.serial_number,
+          strips_required: createdUser.strips_required,
+          strips_collected: createdUser.strips_collected,
+          reward_unlocked: createdUser.reward_unlocked
+        });
+
+        resolve(createdUser);
+      });
+
+    } catch (error) {
+      console.error('[usersService.createUser] Unexpected error:', error);
+      reject(error);
+    }
   });
+};
+
+// ========== FUNCIÓN DE UTILIDAD PARA VALIDAR STRIPS ==========
+const validateStripsData = (userData) => {
+  const { strips_required } = userData;
+  
+  // Si especifica strips_required, validar que sea válido
+  if (strips_required !== undefined) {
+    if (!strips_required || strips_required < 1) {
+      throw new Error('strips_required debe ser mayor a 0');
+    }
+  }
+  
+  return true;
+};
+
+// ========== FUNCIÓN HELPER PARA PREPARAR DATOS DE STRIPS ==========
+const prepareStripsData = (requestData) => {
+  // Mapear nombres del request a nombres de DB (solo los que existen)
+  const mapping = {
+    stripsRequired: 'strips_required',
+    stripsCollected: 'strips_collected',
+    rewardUnlocked: 'reward_unlocked'
+    // Nota: variant -> card_type NO existe en tu DB
+    // Nota: rewardTitle -> reward_title NO existe en tu DB
+  };
+
+  const prepared = { ...requestData };
+  
+  // Aplicar mapeo
+  Object.keys(mapping).forEach(reqKey => {
+    if (requestData[reqKey] !== undefined) {
+      prepared[mapping[reqKey]] = requestData[reqKey];
+      delete prepared[reqKey]; // Eliminar la key original
+    }
+  });
+
+  // Valores por defecto para strips (basados en tu DB)
+  if (prepared.strips_required !== undefined) {
+    prepared.strips_collected = prepared.strips_collected || 0;
+    prepared.reward_unlocked = prepared.reward_unlocked || false;
+  }
+
+  console.log('[prepareStripsData] Transformación:', {
+    original: Object.keys(requestData),
+    transformed: Object.keys(prepared),
+    stripFields: {
+      strips_required: prepared.strips_required,
+      strips_collected: prepared.strips_collected,
+      reward_unlocked: prepared.reward_unlocked
+    }
+  });
+
+  return prepared;
 };
 
 // Actualizar un usuario
@@ -135,17 +302,20 @@ const markWalletAdded = async ({ userId }) => {
 // INSERT con columnas explícitas (recibe el objeto “full”)
 const createUserFull = async (d) => {
   const serial = d.serial_number || uuidv4();
-
-  // tomar del payload o caer a env
   const apple_pass_type_id = d.apple_pass_type_id || PASS_TYPE_IDENTIFIER;
 
-  // guardas token y type id ya normalizados por el process
+  // Determinar el tipo de tarjeta
+  const card_type = d.card_type || 'points';  // Se debe agregar un valor predeterminado si no se pasa
+  console.log('[createUserFull] card_type:', card_type);
+
   const sql = `
     INSERT INTO users
       (name, email, phone, business_id, points, serial_number,
-       apple_auth_token, apple_pass_type_id, card_detail_id, loyalty_account_id, updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+       apple_auth_token, apple_pass_type_id, card_detail_id, loyalty_account_id, 
+       strips_collected, strips_required, reward_unlocked, updated_at, card_type)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14)
     RETURNING *`;
+
   const params = [
     d.name,
     d.email,
@@ -154,13 +324,34 @@ const createUserFull = async (d) => {
     d.points ?? 0,
     serial,
     d.apple_auth_token || null,
-    apple_pass_type_id,                
+    apple_pass_type_id,
     d.card_detail_id || null,
-    d.loyalty_account_id || null
+    d.loyalty_account_id || null,
+    d.strips_collected || 0,
+    d.strips_required || null, 
+    d.reward_unlocked || false,
+    d.card_type || 'points' 
   ];
-  const { rows } = await pool.query(sql, params);
-  return rows[0];
+
+  // Guardar el tipo de tarjeta como 'strips' o 'points'
+  if (card_type === 'strips') {
+    params[10] = 0;  // strips_collected
+    params[11] = d.strips_required || 10; // strips_required
+    params[12] = d.reward_unlocked || false; // reward_unlocked
+  }
+
+  // Ejecución de la consulta para insertar el usuario
+  try {
+    const { rows } = await pool.query(sql, params);
+    const createdUser = rows[0];
+    console.log('[createUserFull] Usuario creado:', createdUser);
+    return createdUser;
+  } catch (error) {
+    console.error('[createUserFull] Database error:', error);
+    throw error;
+  }
 };
+
 
 // UPDATE genérico con patch (solo columnas permitidas)
 const updateUserFields = async (id, patch) => {
@@ -219,7 +410,7 @@ async function bumpPointsBySerial(serial, delta) {
 const getUserDataBySerial = async (serial) => {
   return new Promise((resolve, reject) => {
     const sql = `
-      SELECT name, email, business_id, points
+      SELECT name, email, business_id, points, card_type, strips_collected, strips_required, reward_unlocked
       FROM users WHERE serial_number = $1
     `;
     pool.query(sql, [serial], (error, results) => {
@@ -242,5 +433,7 @@ module.exports = {
   createUserFull,
   updateUserFields, 
   bumpPointsBySerial,
-  getUserDataBySerial
+  getUserDataBySerial, 
+  validateStripsData,
+  prepareStripsData
 };

@@ -72,12 +72,23 @@ const getOneBusiness = async (req, res) => {
 // Crear un nuevo negocio
 const createBusiness = async (req, res) => {
   try {
-    const { name, password,  created_at, updated_at } = req.body; 
+    const { name, password, created_at, updated_at } = req.body; 
     const email = req.body.email.toLowerCase(); 
     const logoBuffer = req.files['logo'] ? req.files['logo'][0].buffer : null;
+    const stripImageOnBuffer  = req.files['strip_image_on'] ? req.files['strip_image_on'][0].buffer : null;
+    const stripImageOffBuffer = req.files['strip_image_off'] ? req.files['strip_image_off'][0].buffer : null;
     //const stripImageBuffer = req.files['strip_image'] ? req.files['strip_image'][0].buffer : null;
- 
-    const business = await businessesProcess.createBusiness(name, email, password, logoBuffer, created_at, updated_at); 
+    if (!logoBuffer) {
+      return res.status(400).json({ error: 'Se requiere la imagen del logo' });
+    }
+
+    if (!stripImageOnBuffer || !stripImageOffBuffer) {
+      return res.status(400).json({ error: 'Se requieren las imágenes de los strips' });
+    }
+
+    console.log('Archivos recibidos:', req.files);
+
+    const business = await businessesProcess.createBusiness(name, email, password, logoBuffer, stripImageOnBuffer, stripImageOffBuffer, created_at, updated_at); 
 
     res.status(201).json({ message: 'Negocio creado con éxito', business });
   } catch (error) {
@@ -92,13 +103,15 @@ const updateBusiness = async (req, res) => {
     const { id } = req.params; 
     const { name, email, password, created_at, updated_at } = req.body; 
     const logoBuffer = req.files['logo'] ? req.files['logo'][0].buffer : null;
-    //const stripImageBuffer = req.files['strip_image'] ? req.files['strip_image'][0].buffer : null;
+    const stripImageOnBuffer  = req.files['strip_image_on'] ? req.files['strip_image_on'][0].buffer : null;
+    const stripImageOffBuffer = req.files['strip_image_off'] ? req.files['strip_image_off'][0].buffer : null;
 
-    if (!logoBuffer) {
-      return res.status(400).json({ error: 'Se requieren las imágenes del logo y strip' });
-    }
+    // Verificar en los logs si las imágenes se han recibido correctamente
+    console.log('Logo:', logoBuffer ? 'Imagen recibida' : 'No se recibió logo');
+    console.log('Strip Image On:', stripImageOnBuffer ? 'Imagen recibida' : 'No se recibió strip_image_on');
+    console.log('Strip Image Off:', stripImageOffBuffer ? 'Imagen recibida' : 'No se recibió strip_image_off');
 
-    const data = await businessesProcess.updateBusiness(id, name, email, password, logoBuffer, created_at, updated_at)
+    const data = await businessesProcess.updateBusiness(id, name, email, password, logoBuffer, stripImageOnBuffer, stripImageOffBuffer, created_at, updated_at)
   
     if (!data) {
       return res.status(404).json({ error: 'Negocio no encontrado' });

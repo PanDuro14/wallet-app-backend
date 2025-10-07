@@ -7,7 +7,6 @@ const crypto = require('crypto');
 let sharp = null;
 try { sharp = require('sharp'); } catch (_) {}
 
-
 // Procesar la imagen 
 function isPNG(buf) {
   return Buffer.isBuffer(buf)
@@ -48,12 +47,20 @@ async function writeStrip(modelDir, buffer) {
     await fsp.writeFile(path.join(modelDir, 'strip.png'), png);
     return;
   }
-  const s1 = await sharp(png).resize({ width: 320, height: 123, fit: 'inside' }).png().toBuffer();
-  const s2 = await sharp(png).resize({ width: 640, height: 246, fit: 'inside' }).png().toBuffer();
+  const makeStrip = async (w, h) => {
+    return await sharp(png)
+      .resize({ width: w, height: h, fit: 'cover', position: 'center', background: { r:0,g:0,b:0,alpha:0 } })
+      .png()
+      .toBuffer();
+  };
+  const s1 = await makeStrip(624, 246);
+  const s2 = await makeStrip(1248, 492);
   await fsp.writeFile(path.join(modelDir, 'strip.png'), s1);
   await fsp.writeFile(path.join(modelDir, 'strip@2x.png'), s2);
 }
 
+const DesignVariants = { POINTS: 'points', STRIPS: 'strips' };
+ 
 async function buildTempModel(baseDir, assets = {}) {
   const tmpBase = await fsp.mkdtemp(path.join(os.tmpdir(), 'pass-'));
   const modelDir = `${tmpBase}.pass`;
@@ -79,7 +86,6 @@ async function rmrf(p) {
   }
 }
 
-
 async function loadPasskit() {
   try { const m = await import('passkit-generator'); return m.default ? { ...m, ...m.default } : m; }
   catch(_) {}
@@ -98,7 +104,6 @@ function hexToRgb(hex) {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
   return m ? `rgb(${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)})` : null;
 }
-
 
 // método para pasarse por los huevos el modelo >:c
 async function overridePassJson(modelDir, payload) {
@@ -123,7 +128,6 @@ async function overridePassJson(modelDir, payload) {
   if (payload.barcodes) merged.barcodes = payload.barcodes;
   if (payload.barcode)  merged.barcode  = payload.barcode;
 
-
   // storeCard (reemplazar arrays completos si vienen)
   if (payload.storeCard) {
     merged.storeCard = merged.storeCard || {};
@@ -138,7 +142,6 @@ async function overridePassJson(modelDir, payload) {
   await fsp.writeFile(passJsonPath, JSON.stringify(merged, null, 2), 'utf8');
 }
 
-
 // Selección de qr, codigo de barras, codigo aztec, pd
 function normalizeBarcodePref(pref) {
   if (!pref) return null;
@@ -151,21 +154,131 @@ function normalizeBarcodePref(pref) {
   return null;
 }
 
-// ---------------------- Marcador grandote para localizarlo desde lejos ---------------------------------------------------------------->
-// ---------------------- Marcador grandote para localizarlo desde lejos ---------------------------------------------------------------->
-// ---------------------- Marcador grandote para localizarlo desde lejos ---------------------------------------------------------------->
-// ---------------------- Marcador grandote para localizarlo desde lejos ---------------------------------------------------------------->
+// ====== FUNCIÓN CORREGIDA QUE MANEJA STRIPS ======
+function buildFieldsByVariant({ 
+  variant, userName, points = 0, tier = 'Bronce', since = '',
+  // NUEVOS parámetros para strips
+  strips_collected, strips_required, reward_title, isComplete
+}) {
+  const commonBack = [{ key: 'terms', label: 'Términos', value: 'Válido en sucursales participantes.' }];
+
+  // Verifica si es una tarjeta tipo "strips" - CORREGIDO: comparación directa
+  if (String(variant).toLowerCase() === 'strips') {
+    
+    // Si hay datos de strips, generar los campos relacionados con la colección
+    if (strips_collected !== undefined && strips_required !== undefined) {
+      const progress = `${strips_collected}/${strips_required}`;
+      const displayValue = isComplete ? 'COMPLETADA' : progress;
+      
+      console.log('[buildFieldsByVariant] Generando campos para strips:', {
+        strips_collected, strips_required, isComplete, displayValue
+      });
+      
+      return {
+        primaryFields: [{ 
+          key: 'strips_collection', 
+          label: ' ', 
+          value: ' ', 
+          textAlignment: 'PKTextAlignmentCenter' 
+        }],
+        secondaryFields: userName ? [{ 
+          key: 'member', 
+          label: 'MIEMBRO', 
+          value: userName 
+        }] : [],
+        auxiliaryFields: [],
+        backFields: [
+          ...commonBack,
+          {
+            key: 'progress_detail',
+            label: 'Progreso',
+            value: `${strips_collected} de ${strips_required} obtenidos`
+          },
+          ...(isComplete && reward_title ? [{
+            key: 'reward',
+            label: 'Premio Ganado',
+            value: reward_title
+          }] : [])
+        ]
+      };
+    }
+
+    // Si no hay colección, regresar un diseño por defecto para strips (si no se tienen datos completos)
+    return {
+      primaryFields: [{ 
+        key: 'strips', 
+        label: 'TARJETA', 
+        value: 'Sin colección', // Puedes personalizar este valor
+        textAlignment: 'PKTextAlignmentCenter' 
+      }],
+      secondaryFields: [
+        { key: 'tier', label: 'NIVEL', value: tier },
+        { key: 'since', label: 'MIEMBRO DESDE', value: since || new Date().toISOString().slice(0,10) }
+      ],
+      auxiliaryFields: userName ? [{ key: 'name', label: 'NOMBRE', value: userName }] : [],
+      backFields: commonBack
+    };
+  }
+
+  // Si no es una tarjeta de tipo "strips", asumimos que es una tarjeta de tipo "points"
+  return {
+    primaryFields: [{
+      key: 'points',
+      label: 'PUNTOS',
+      value: String(points),
+      textAlignment: 'PKTextAlignmentCenter'
+    }],
+    secondaryFields: [
+      { key: 'tier',  label: 'NIVEL',         value: tier },
+      { key: 'since', label: 'MIEMBRO DESDE', value: since || new Date().toISOString().slice(0,10) }
+    ],
+    auxiliaryFields: userName ? [{ key: 'name', label: 'NOMBRE', value: userName }] : [],
+    backFields: commonBack
+  };
+}
+
+
+// Crear la tarjeta 
 // Crear la tarjeta 
 async function createPkPassBuffer({
-    cardCode, userName, programName, organizationName,
-    backgroundColor, foregroundColor,
-    colors = {}, fields = {}, barcode = {}, assets = {}, points, 
-    appleAuthToken, webServiceBase
-  }) {
+  cardCode, userName, programName, organizationName,
+  backgroundColor, foregroundColor,
+  colors = {}, fields = {}, barcode = {}, assets = {}, points, 
+  appleAuthToken, webServiceBase,
+  variant, 
+  strips_collected, strips_required, reward_title, isComplete
+}) {
   if (!cardCode) throw new Error('cardCode requerido.');
   if (!process.env.PASS_TYPE_IDENTIFIER || !process.env.APPLE_TEAM_ID) {
     throw new Error('PassKit no configurado (env).');
   }
+
+  // CORRECCIÓN: Normalizar la variante de manera más flexible
+  const normalizedVariant = (variant || '').toLowerCase().trim();
+  
+  // Log para debug
+  console.log('[createPkPassBuffer] Variant validation:', {
+    original: variant,
+    normalized: normalizedVariant,
+    isStrips: normalizedVariant === 'strips',
+    isPoints: normalizedVariant === 'points'
+  });
+
+  // CORRECCIÓN: Validación más flexible - permitir ambas variantes o valor vacío
+  if (normalizedVariant && normalizedVariant !== 'strips' && normalizedVariant !== 'points') {
+    throw new Error(`variant debe ser "strips" o "points", recibido: "${variant}"`);
+  }
+
+  // Si no se especifica variante, asumir 'points' como default
+  const finalVariant = normalizedVariant || 'points';
+
+  console.log('[createPkPassBuffer] Parámetros recibidos:', {
+    variant: finalVariant, 
+    strips_collected, 
+    strips_required, 
+    reward_title, 
+    isComplete
+  });
 
   // 1) Cargar y validar certs
   const CERTS_DIR = process.env.PASS_CERTS_DIR || path.join(process.cwd(), 'certs');
@@ -173,6 +286,7 @@ async function createPkPassBuffer({
   const certPem = cleanPem(fs.readFileSync(path.join(CERTS_DIR, 'pass-cert.pem')));
   const keyPem  = cleanPem(fs.readFileSync(path.join(CERTS_DIR, 'pass-key.pem')));
   const passphrase = process.env.PASS_CERT_PASSPHRASE || '';
+
   const baseOrg = (typeof organizationName === 'string' && organizationName.length)
     ? organizationName
     : (process.env.ORG_NAME || 'Tu Empresa');
@@ -184,26 +298,34 @@ async function createPkPassBuffer({
 
   // 2) Clonar modelo y override de imágenes
   const PASS_MODEL_DIR = process.env.PASS_MODEL_DIR || path.join(process.cwd(), 'passModels', 'loyalty.pass');
+
+  // según variante, decidir si queremos strip
+  const wantStrip = finalVariant === DesignVariants.STRIPS;
+  if (!wantStrip) assets = { ...assets, strip: null };   // si es points, fuerza remover strip
+
+  console.log('[createPkPassBuffer] Assets a usar:', {
+    variant: finalVariant, 
+    wantStrip, 
+    hasStripAsset: !!assets.strip, 
+    hasLogo: !!assets.logo
+  });
+
   const modelDir = await buildTempModel(PASS_MODEL_DIR, assets);
   function rmIfExists(p) { try { fs.unlinkSync(p); } catch {} }
-
   if (assets.strip === null) {
-    const STRIP_FILES = [
-      'strip.png','strip@2x.png','strip@3x.png',
-      'strip.jpg','strip@2x.jpg','strip@3x.jpg'
-    ];
-    for (const f of STRIP_FILES) rmIfExists(path.join(modelDir, f));
+    for (const f of ['strip.png','strip@2x.png','strip@3x.png','strip.jpg','strip@2x.jpg','strip@3x.jpg']) {
+      rmIfExists(path.join(modelDir, f));
+    }
   }
 
-
-  // 3) Construir payload
+  // 3) Construir payload (colores)
   const bg = colors.background ? (hexToRgb(colors.background) || colors.background)
-                               : (hexToRgb(backgroundColor) || backgroundColor || 'rgb(45,52,54)');
+                              : (hexToRgb(backgroundColor) || backgroundColor || 'rgb(45,52,54)');
   const fg = colors.foreground ? (hexToRgb(colors.foreground) || colors.foreground)
-                               : (hexToRgb(foregroundColor) || foregroundColor || 'rgb(230,230,230)');
+                              : (hexToRgb(foregroundColor) || foregroundColor || 'rgb(230,230,230)');
   const lc = colors.label ? (hexToRgb(colors.label) || colors.label) : undefined;
 
-  // Si llega "points" directo, forzamos/inyectamos en fields.primary
+  // Si llega "points" directo, mételo en fields.primary (se conservará en ambos diseños)
   if (points != null) {
     const v = String(points);
     fields = { ...fields, primary: Array.isArray(fields.primary) ? [...fields.primary] : [] };
@@ -212,33 +334,20 @@ async function createPkPassBuffer({
     else fields.primary[i] = { ...fields.primary[i], value: v };
   }
 
-  const primaryFields   = fields.primary   ?? [{ key: 'points', label: 'POINTS', value: '0', textAlignment: 'PKTextAlignmentCenter' }];
-  const secondaryFields = fields.secondary ?? [{ key: 'member', label: 'MEMBER', value: userName || 'Member' }];
-  const backFields      = fields.back ?? [];
-
-  // formato de codigo qr 
+  // BARCODES
   const msg = String(barcode?.message ?? cardCode);
   const messageEncoding = barcode?.encoding || 'iso-8859-1';
   const altText = barcode?.altText ?? msg;
 
   const baseRaw = webServiceBase || process.env.PUBLIC_BASE_URL || process.env.WALLET_BASE_URL || '';
-  if (!baseRaw) {
-    throw new Error('Base pública no configurada (PUBLIC_BASE_URL o WALLET_BASE_URL).');
-  }
-  const base = baseRaw.replace(/\/+$/, ''); // quita / repetidos del final
-  if (!appleAuthToken) {
-    throw new Error('appleAuthToken requerido para authenticationToken.');
-  }
+  if (!baseRaw) throw new Error('Base pública no configurada (PUBLIC_BASE_URL o WALLET_BASE_URL).');
+  const base = baseRaw.replace(/\/+$/, '');
+  if (!appleAuthToken) throw new Error('appleAuthToken requerido para authenticationToken.');
 
-  // Acepta 1 formato (format/type/pref) o varios (formats[])
   let formatsRaw = [];
-  if (Array.isArray(barcode?.formats) && barcode.formats.length) {
-    formatsRaw = barcode.formats;
-  } else if (barcode?.pref || barcode?.type || barcode?.format) {
-    formatsRaw = [barcode.pref || barcode.type || barcode.format];
-  } else {
-    formatsRaw = ['qr']; // default
-  }
+  if (Array.isArray(barcode?.formats) && barcode.formats.length) formatsRaw = barcode.formats;
+  else if (barcode?.pref || barcode?.type || barcode?.format) formatsRaw = [barcode.pref || barcode.type || barcode.format];
+  else formatsRaw = ['qr'];
 
   const barcodesArr = formatsRaw.map(f => ({
     message: msg,
@@ -246,16 +355,36 @@ async function createPkPassBuffer({
     messageEncoding,
     altText
   }));
-
-  // Evitar que se quede vació, predeterminadamente queda un qr
   if (!barcodesArr.length) {
-    barcodesArr.push({
-      message: msg,
-      format: 'PKBarcodeFormatQR',
-      messageEncoding,
-      altText
-    });
+    barcodesArr.push({ message: msg, format: 'PKBarcodeFormatQR', messageEncoding, altText });
   }
+
+  // === CAMPOS por variante ===
+  console.log('[createPkPassBuffer] Llamando buildFieldsByVariant con:', {
+    variant: wantStrip ? 'strips' : 'points',
+    strips_collected,
+    strips_required,
+    reward_title,
+    isComplete
+  });
+
+  const { primaryFields, secondaryFields, auxiliaryFields, backFields } = buildFieldsByVariant({
+     variant: wantStrip ? 'strips' : 'points',
+    userName,
+    points: points ?? 0,
+    tier: fields?.tier || 'Bronce',
+    since: fields?.since,
+    strips_collected,
+    strips_required,
+    reward_title,
+    isComplete
+  });
+
+  console.log('[createPkPassBuffer] Fields generados:', {
+    primary: primaryFields?.length || 0,
+    secondary: secondaryFields?.length || 0,
+    primaryContent: primaryFields?.[0]
+  });
 
   const hideName = !programName || String(programName).trim() === '';
   const payload = {
@@ -269,25 +398,23 @@ async function createPkPassBuffer({
 
     organizationName: hideName ? '\u00A0' : (organizationName || process.env.ORG_NAME || 'Tu Empresa'),
     description: hideName ? ' ' : `${programName || 'Loyalty'} Card`,
-    ...(hideName ? {} : { logoText: programName }),   // <-- deja solo esto
+    ...(hideName ? {} : { logoText: programName }),
 
     foregroundColor: fg,
     backgroundColor: bg,
-    labelColor: lc,
+    ...(lc ? { labelColor: lc } : {}),
 
     storeCard: {
       headerFields: [],
       primaryFields,
       secondaryFields,
-      auxiliaryFields: [],
-      backFields,
-      additionalInfoFields: []
+      auxiliaryFields: [],  
+      backFields
     },
 
     barcodes: barcodesArr,
     barcode: barcodesArr[0]
   };
-
 
   // 4) Forzar pass.json
   await overridePassJson(modelDir, payload);
@@ -328,11 +455,9 @@ async function createPkPassBuffer({
   }
 }
 
-module.exports = { createPkPassBuffer };
-
+module.exports = { createPkPassBuffer, buildFieldsByVariant };
 
 /* PLANTILLAS DE CREACIÓN 
-
 Vacio (qr predeterminado)
 {
   "businessId": 1,
