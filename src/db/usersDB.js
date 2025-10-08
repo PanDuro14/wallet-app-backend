@@ -420,6 +420,63 @@ const getUserDataBySerial = async (serial) => {
   });
 };
 
+const searchUsersByData = async (searchTerm, searchType) => {
+  return new Promise((resolve, reject) => {
+    let sql = `
+      SELECT 
+        serial_number as serial,
+        name, 
+        email, 
+        phone, 
+        card_type, 
+        points, 
+        strips_collected, 
+        strips_required,
+        reward_title,
+        reward_unlocked
+      FROM users 
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    
+    // Determinar el tipo de búsqueda
+    if (searchType === 'serial') {
+      sql += ` AND serial_number = $1`;
+      params.push(searchTerm.trim());
+    } else if (searchType === 'email') {
+      sql += ` AND LOWER(email) LIKE LOWER($1)`;
+      params.push(`%${searchTerm.trim()}%`);
+    } else if (searchType === 'phone') {
+      // Limpiar el teléfono de espacios y caracteres especiales
+      const cleanPhone = searchTerm.replace(/[\s\-\(\)]/g, '');
+      sql += ` AND REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE $1`;
+      params.push(`%${cleanPhone}%`);
+    } else {
+      // Búsqueda general en todos los campos
+      const cleanPhone = searchTerm.replace(/[\s\-\(\)]/g, '');
+      sql += ` AND (
+        serial_number = $1 OR
+        LOWER(email) LIKE LOWER($2) OR
+        REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE $3
+      )`;
+      params.push(searchTerm.trim(), `%${searchTerm.trim()}%`, `%${cleanPhone}%`);
+    }
+    
+    sql += ` LIMIT 10`;
+
+    pool.query(sql, params, (error, results) => {
+      if (error) {
+        return reject({ 
+          message: error.message, 
+          code: error.code 
+        });
+      }
+      resolve(results.rows);
+    });
+  });
+};
+
 
 module.exports = {
   getAllUsers,
@@ -435,5 +492,6 @@ module.exports = {
   bumpPointsBySerial,
   getUserDataBySerial, 
   validateStripsData,
-  prepareStripsData
+  prepareStripsData, 
+  searchUsersByData
 };

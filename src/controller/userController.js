@@ -1,4 +1,5 @@
 const userProcess = require('../processes/usersProcess');
+const userDB = require('../db/usersDB');
 
 // Obtener todos los usuarios
 const getAllUsers = async (req, res) => {
@@ -102,6 +103,47 @@ const getUserDataBySerial = async (req, res) => {
 };
 
 
+const getUserByData = async (req, res) => {
+  try {
+    const { serial, email, phone } = req.body; 
+    const searchTerm = serial || email || phone; 
+    
+    if (!searchTerm) {
+      return res.status(400).json({ 
+        error: 'Proporciona un término de búsqueda (serial, email o phone)' 
+      }); 
+    }
+
+    // Determinar el tipo de búsqueda
+    let searchType = 'general';
+    if (serial) {
+      searchType = 'serial';
+    } else if (email) {
+      searchType = 'email';
+    } else if (phone) {
+      searchType = 'phone';
+    }
+
+    // Llamar a la capa de base de datos
+    const users = await userDB.searchUsersByData(searchTerm, searchType);
+    
+    if (!users || users.length === 0) {
+      return res.status(404).json({ 
+        error: 'No se encontraron usuarios con los criterios proporcionados' 
+      });
+    }
+
+    res.status(200).json(users);
+
+  } catch (error) {
+    console.error('Error en getUserByData:', error);
+    res.status(500).json({ 
+      error: 'Error al buscar usuarios',
+      message: error.message 
+    }); 
+  }
+};
+
 module.exports = {
   getAllUsers,
   getOneUser,
@@ -110,5 +152,6 @@ module.exports = {
   updateUser,
   deleteUser,
   retryWallet, 
-  getUserDataBySerial
+  getUserDataBySerial, 
+  getUserByData
 };

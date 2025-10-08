@@ -6,6 +6,7 @@ const { authenticateUser } = require('../../Middleware/authenticationMiddleware'
 router
   .post('/getbyserial', userController.getUserDataBySerial)
   .get('/business/:id', userController.getOneUserByBusiness) // Obtener todos los usuarios por business
+  .post('/search', userController.getUserByData)
   .get('/', userController.getAllUsers) // Obtener todos los usuarios
   .get('/:id', userController.getOneUser) // Obtener un usuario por ID
   .post('/', userController.createUser) // Crear un nuevo usuario
