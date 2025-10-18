@@ -6,8 +6,9 @@ const {
   listPushTokensBySerial, 
   listUpdatedSerialsSince,  
   deleteRegistration,  
-  grantStripBySerial
-
+  grantStripBySerial, 
+  resetStripsBySerial, 
+  saveStripCompletionHistory     
 } = require('../db/appleWalletdb');
 const { loadBrandAssets } = require('../processes/walletProcess');
 const { notifyWallet } = require('../services/apnsService');
@@ -197,25 +198,37 @@ const bumpPoints = async (req, res) => {
 };
 
 // POST /internal/passes/:serial/grant-strip
+// Agregar estas funciones al passkitController.js
+
+// POST /internal/passes/:serial/grant-strip
 const grantStrip = async (req, res) => {
   try {
     const serial = cleanUuid(req.params.serial);
     const stripNumber = Number(req.body?.stripNumber);
 
-    // Validar que el serial sea válido
     if (!isUuid(serial)) return res.status(400).send('Serial inválido');
     
-    // Validar que el número de strip sea válido
     if (!Number.isFinite(stripNumber) || stripNumber < 1) {
       return res.status(400).json({ error: 'stripNumber debe ser un número positivo' });
     }
 
-    // Obtener la tarjeta y verificar si es del tipo 'strips'
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
 
     if (row.card_type !== 'strips') {
       return res.status(400).json({ error: 'Esta tarjeta no es de tipo strips' });
+    }
+
+    // Verificar si ya está completo
+    if (row.strips_collected >= row.strips_required) {
+      return res.status(400).json({ 
+        error: 'collection_complete',
+        message: 'La colección ya está completa. Canjea el premio o reinicia.',
+        strips_collected: row.strips_collected,
+        strips_required: row.strips_required,
+        reward_title: row.reward_title,
+        isComplete: true
+      });
     }
 
     // Actualizar los strips en la base de datos
@@ -228,18 +241,13 @@ const grantStrip = async (req, res) => {
       });
     }
 
-    // Datos actualizados de la base de datos
     const data = updated.data;
-
-    // Recalcular la colección completa
     const isComplete = data.strips_collected >= data.strips_required;
 
-    // Notificar a los usuarios con APNs si es necesario
+    // Notificar con APNs
     let notified = 0;
     if (process.env.APNS_ENABLED === 'true') {
       const tokens = await listPushTokensBySerial(serial);
-      console.log('[grantStrip] pushTokens', tokens.length);
-
       const results = await Promise.allSettled(
         tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
       );
@@ -248,8 +256,7 @@ const grantStrip = async (req, res) => {
         const r = results[i];
         const token = tokens[i].push_token;
         if (r.status === 'fulfilled') {
-          const { status, reason, host } = r.value;
-          console.log('[APNs Strip]', { token: token?.slice?.(0, 8), status, reason });
+          const { status } = r.value;
           if (status === 200) notified++;
           if (status === 410) {
             try {
@@ -264,7 +271,6 @@ const grantStrip = async (req, res) => {
       }
     }
 
-    // Responder con la información actualizada
     return res.json({ 
       ok: true, 
       strips_collected: data.strips_collected,
@@ -285,6 +291,74 @@ const grantStrip = async (req, res) => {
   }
 };
 
+// POST /internal/passes/:serial/reset-strips
+const resetStrips = async (req, res) => {
+  try {
+    const serial = cleanUuid(req.params.serial);
+    const { redeemed = false } = req.body;
+
+    if (!isUuid(serial)) return res.status(400).send('Serial inválido');
+
+    const row = await findUserPassBySerial(serial);
+    if (!row) return res.sendStatus(404);
+
+    if (row.card_type !== 'strips') {
+      return res.status(400).json({ error: 'Esta tarjeta no es de tipo strips' });
+    }
+
+    // Guardar en historial si fue completado
+    if (row.strips_collected >= row.strips_required) {
+      await saveStripCompletionHistory({
+        userId: row.id,
+        serial: serial,
+        strips_collected: row.strips_collected,
+        strips_required: row.strips_required,
+        reward_title: row.reward_title,
+        completed_at: new Date(),
+        redeemed: redeemed,
+        redeemed_at: redeemed ? new Date() : null
+      });
+    }
+
+    // Resetear strips en la base de datos
+    const updated = await resetStripsBySerial(serial);
+    if (!updated) {
+      return res.status(500).json({ error: 'Error al resetear strips' });
+    }
+
+    // Notificar con APNs
+    let notified = 0;
+    if (process.env.APNS_ENABLED === 'true') {
+      const tokens = await listPushTokensBySerial(serial);
+      const results = await Promise.allSettled(
+        tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
+      );
+
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        if (r.status === 'fulfilled' && r.value.status === 200) {
+          notified++;
+        }
+      }
+    }
+
+    return res.json({
+      ok: true,
+      strips_collected: 0,
+      strips_required: updated.strips_required,
+      reward_title: updated.reward_title,
+      isComplete: false,
+      notified,
+      message: redeemed 
+        ? 'Premio canjeado y colección reiniciada' 
+        : 'Colección reiniciada exitosamente'
+    });
+
+  } catch (err) {
+    console.error('resetStrips error:', err);
+    return res.status(500).json({ error: 'Error del servidor' });
+  }
+};
 
 
 // ========== GET PASS - CON STRIPS DESDE BUSINESS ==========
@@ -704,5 +778,6 @@ module.exports = {
   listRegistrations, 
   deregisterDevice, 
   acceptLogs, 
-  grantStrip
+  grantStrip, 
+  resetStrips  
 };

@@ -266,6 +266,104 @@ async function deleteRegistration({ deviceId, passTypeId, serial, pushToken }) {
   return rowCount > 0;
 }
 
+// Resetear strips a 0
+async function resetStripsBySerial(serial) {
+  await pool.query('BEGIN');
+  
+  try {
+    // 1. Obtener el user_id
+    const userQuery = 'SELECT id FROM users WHERE serial_number = $1';
+    const userResult = await pool.query(userQuery, [serial]);
+    const userId = userResult.rows[0]?.id;
+    
+    if (!userId) {
+      await pool.query('ROLLBACK');
+      return null;
+    }
+
+    // 2. Borrar los strips individuales del log
+    await pool.query('DELETE FROM user_strips_log WHERE user_id = $1', [userId]);
+
+    // 3. Resetear contador en users
+    const updateQuery = `
+      UPDATE users
+      SET 
+        strips_collected = 0,
+        reward_unlocked = false,
+        updated_at = NOW()
+      WHERE serial_number = $1
+      RETURNING 
+        id, 
+        serial_number, 
+        strips_collected, 
+        strips_required, 
+        reward_title,
+        updated_at
+    `;
+    
+    const result = await pool.query(updateQuery, [serial]);
+    
+    await pool.query('COMMIT');
+    return result.rows[0] || null;
+    
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    throw error;
+  }
+}
+
+// Guardar historial de colecciones completadas
+async function saveStripCompletionHistory(data) {
+  const query = `
+    INSERT INTO strip_completion_history 
+    (user_id, serial, strips_collected, strips_required, reward_title, completed_at, redeemed, redeemed_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING id
+  `;
+  
+  const values = [
+    data.userId,
+    data.serial,
+    data.strips_collected,
+    data.strips_required,
+    data.reward_title,
+    data.completed_at,
+    data.redeemed,
+    data.redeemed_at
+  ];
+  
+  const result = await pool.query(query, values);
+  return result.rows[0];
+}
+
+// Obtener historial de un usuario
+async function getStripCompletionHistory(serial) {
+  const query = `
+    SELECT 
+      h.*,
+      u.name as user_name
+    FROM strip_completion_history h
+    LEFT JOIN users u ON u.serial_number = h.serial
+    WHERE h.serial = $1
+    ORDER BY h.completed_at DESC
+  `;
+  
+  const result = await pool.query(query, [serial]);
+  return result.rows;
+}
+
+// Contar ciclos completados
+async function countCompletedCycles(serial) {
+  const query = `
+    SELECT COUNT(*) as total_cycles
+    FROM strip_completion_history
+    WHERE serial = $1
+  `;
+  
+  const result = await pool.query(query, [serial]);
+  return parseInt(result.rows[0]?.total_cycles || 0);
+}
+
 module.exports = {
   findUserPassBySerial,
   upsertRegistration,
@@ -275,5 +373,9 @@ module.exports = {
   updateRegistrationEnv, 
   grantStripBySerial,
   getUserStrips,
-  deleteRegistration
+  deleteRegistration, 
+  resetStripsBySerial,
+  saveStripCompletionHistory,
+  getStripCompletionHistory,
+  countCompletedCycles
 };

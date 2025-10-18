@@ -144,3 +144,5 @@ app.use('/public', express.static(path.join(process.cwd(), 'public'), {
   maxAge: '7d', etag: true, immutable: false
 }));
 
+
+// apt update && apt install -y postgresql-client

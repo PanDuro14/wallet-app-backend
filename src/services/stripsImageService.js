@@ -35,11 +35,13 @@ class StripsImageService {
       const outerWidth = cardWidth; // 300px
       const outerHeight = 120;      // Apple Wallet slot
 
+      // ===== Distribución en 2 filas =====
+      const numRows = 2;
+      const stripsPerRow = Math.ceil(total / numRows);
+
       // ===== Tamaño interno (grilla) =====
-      const innerWidth = 260; // más pequeño
-      const innerHeight = 120; // más pequeño
-      const stripsPerRow = 4;
-      const numRows = Math.ceil(total / stripsPerRow);
+      const innerWidth = 260;
+      const innerHeight = 120;
 
       const stripWidth = Math.floor(innerWidth / stripsPerRow);
       const stripHeight = Math.floor(innerHeight / numRows);
