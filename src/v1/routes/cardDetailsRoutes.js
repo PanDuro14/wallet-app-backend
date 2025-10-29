@@ -39,5 +39,6 @@ router.post('/unified/with-strips',
   ]), 
   carddetailController.createDesignWithStripsImages
 );
+router.get('/getActiveDesign/:business_id', carddetailController.getActiveCardByBusiness); 
 
 module.exports = router; 

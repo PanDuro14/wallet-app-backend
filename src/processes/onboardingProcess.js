@@ -4,7 +4,13 @@ const crypto = require('crypto');
 const usersService      = require('../services/usersService');
 const businessService   = require('../services/businessService');
 const carddetailService = require('../services/carddetailService');
-const walletProcess     = require('../processes/walletProcess');
+
+// IMPORTS CORREGIDOS - Importar funciones específicas
+const { 
+  issueGoogleWalletLink,      // JWT legacy (más confiable para crear)
+  createGoogleWalletObject,   // REST API
+  issueGoogleWallet           // Wrapper unificado
+} = require('../processes/walletProcess');
 
 const pickFirst = (arr) => (Array.isArray(arr) && arr.length ? arr[0] : null);
 
@@ -21,15 +27,10 @@ const ensureBusiness = async (business_id) => {
 /* ====================== HELPERS PARA DESENROLLAR DISEÑOS ====================== */
 function unwrapDesignRow(row) {
   if (!row) return null;
-  // Caso ideal: objeto plano ya con columnas
   if ('business_id' in row || 'design_json' in row) return row;
-
-  // Casos envueltos comunes
   if (row.design && (row.design.business_id != null || row.design.design_json != null)) return row.design;
   if (Array.isArray(row.rows) && row.rows.length) return unwrapDesignRow(row.rows[0]);
   if (row.data && (row.data.business_id != null || row.data.design_json != null)) return row.data;
-
-  // design_json como string -> parsea
   if (typeof row.design_json === 'string') {
     try { row.design_json = JSON.parse(row.design_json); } catch {}
   }
@@ -63,8 +64,7 @@ const pickDesign = async (business_id, card_detail_id) => {
       got_row: !!raw,
       unwrapped: !!design,
       keys: Object.keys(design || {}),
-      row_business_id: design?.business_id,
-      row_json_businessId: design?.design_json?.businessId
+      row_business_id: design?.business_id
     });
 
     if (!design) {
@@ -82,7 +82,6 @@ const pickDesign = async (business_id, card_detail_id) => {
     return design;
   }
 
-  // Sin card_detail_id: toma el primero del negocio
   const list = await carddetailService.getAllCardsByBusiness(bizId);
   const first = Array.isArray(list) && list.length ? list[0] : null;
 
@@ -110,11 +109,9 @@ const createUserAndIssueProcess = async ({
   points,
   variant,
   cardType,
-  // Parámetros de strips
   stripsRequired = 10,
   rewardTitle,
   rewardDescription,
-  // Parámetros opcionales para wallets
   colors,
   barcode,
   tier,
@@ -122,7 +119,7 @@ const createUserAndIssueProcess = async ({
 }) => {
   
   /* ====== 1. DETERMINAR TIPO DE TARJETA ====== */
-  let finalCardType = 'points'; // Default
+  let finalCardType = 'points';
   
   if (cardType) {
     finalCardType = cardType.toLowerCase().trim();
@@ -130,7 +127,6 @@ const createUserAndIssueProcess = async ({
     finalCardType = variant.toLowerCase().trim();
   }
 
-  // Validar variante
   if (finalCardType !== 'strips' && finalCardType !== 'points') {
     const err = new Error('variant/cardType debe ser "strips" o "points"');
     err.statusCode = 400;
@@ -143,7 +139,6 @@ const createUserAndIssueProcess = async ({
     final_cardType: finalCardType
   });
 
-  // Validación específica para strips
   if (finalCardType === 'strips' && !rewardTitle) {
     const err = new Error('rewardTitle es obligatorio para tarjetas de strips');
     err.statusCode = 400;
@@ -154,7 +149,6 @@ const createUserAndIssueProcess = async ({
   const biz = await ensureBusiness(business_id);
   const design = await pickDesign(business_id, card_detail_id);
 
-  // Saneamiento básico
   name  = (name ?? '').toString().trim();
   email = (email ?? '').toString().trim();
   phone = (phone ?? '').toString().trim() || null;
@@ -177,7 +171,6 @@ const createUserAndIssueProcess = async ({
 
   const loyalty_account_id = `CARD-${business_id}-${serial_number.slice(0, 8).toUpperCase()}`;
 
-  // Validaciones de longitud
   const assertLen = (v, n, field) => {
     if (v != null && String(v).length > n) {
       const err = new Error(`${field} demasiado largo (${String(v).length} > ${n})`);
@@ -192,7 +185,6 @@ const createUserAndIssueProcess = async ({
   assertLen(loyalty_account_id, 64, 'loyalty_account_id');
 
   /* ====== 4. PREPARAR DATOS PARA CREAR USUARIO ====== */
-  // Inicializar puntos solo si es tarjeta de puntos
   const initial_points = finalCardType === 'points' ? (points || 0) : 0;
 
   const userData = {
@@ -207,10 +199,9 @@ const createUserAndIssueProcess = async ({
     card_detail_id: design.id,
     loyalty_account_id,
     card_type: finalCardType,
-    design_variant: finalCardType // Para compatibilidad
+    design_variant: finalCardType
   };
 
-  // Agregar campos específicos de strips
   if (finalCardType === 'strips') {
     userData.strips_collected = 0;
     userData.strips_required = stripsRequired || 10;
@@ -221,7 +212,6 @@ const createUserAndIssueProcess = async ({
 
   console.log('[createUserAndIssue] userData preparado:', {
     card_type: userData.card_type,
-    design_variant: userData.design_variant,
     strips_required: userData.strips_required,
     reward_title: userData.reward_title,
     points: userData.points
@@ -238,14 +228,13 @@ const createUserAndIssueProcess = async ({
     points: user.points
   });
 
-  // Verificación crítica
   if (finalCardType === 'strips' && !user.card_type) {
     console.error('[CRITICAL] Usuario creado sin card_type, revisar usersService.createUser');
   }
 
   /* ====== 6. EMITIR WALLETS ====== */
   
-  // 6.1) Google Wallet - Usar método REST API actualizado
+  // 6.1) Google Wallet - CORREGIDO CON JWT (más confiable)
   console.log('[createUserAndIssue] Creando Google Wallet:', {
     cardCode: serial_number,
     variant: finalCardType,
@@ -253,43 +242,84 @@ const createUserAndIssueProcess = async ({
     strips_required: finalCardType === 'strips' ? (userData.strips_required || 10) : undefined
   });
 
-  let google_save_url;
+  let google_save_url = null;
+  let googleObjectId = null;
+  
   try {
-    // Usar el nuevo método unificado con REST API
-    const googleResult = await walletProcess.issueGoogleWallet({
+    // MÉTODO 1: Intentar con REST API primero (permite actualizaciones)
+    console.log('[createUserAndIssue] Intentando REST API...');
+    
+    const googleResult = await createGoogleWalletObject({
       cardCode: serial_number,
       userName: user.name,
       programName: biz.name || 'Loyalty Program',
       businessId: business_id,
+      card_detail_id,
       variant: finalCardType,
       points: initial_points,
       tier: tier || (finalCardType === 'points' ? 'Bronce' : undefined),
       since: since || new Date().toISOString().slice(0, 10),
-      // Parámetros de strips
       strips_collected: finalCardType === 'strips' ? 0 : undefined,
       strips_required: finalCardType === 'strips' ? (userData.strips_required || 10) : undefined,
       reward_title: finalCardType === 'strips' ? userData.reward_title : undefined,
       isComplete: false,
-      // Opciones adicionales
       colors: colors || {
         background: design.background_color || biz.background_color || '#2d3436',
         foreground: design.foreground_color || biz.foreground_color || '#E6E6E6'
       },
-      barcode: barcode || { type: 'qr' },
-      useRestApi: true // Usar REST API por defecto
+      barcode: barcode || { type: 'qr' }, 
     });
 
-    google_save_url = googleResult.url;
+    googleObjectId = googleResult.objectId;
+    google_save_url = `https://pay.google.com/gp/v/save/${encodeURIComponent(googleObjectId)}`;
     
-    console.log('[createUserAndIssue] Google Wallet creado:', {
+    console.log('[createUserAndIssue] ✓ Google Wallet REST API exitoso:', {
+      objectId: googleObjectId,
       url: google_save_url,
-      objectId: googleResult.objectId,
-      method: googleResult.method
+      existed: googleResult.existed
     });
-  } catch (googleError) {
-    console.error('[createUserAndIssue] Error creando Google Wallet:', googleError);
-    // No fallar todo el proceso, solo logear el error
-    google_save_url = null;
+    
+  } catch (restApiError) {
+    console.error('[createUserAndIssue] ❌ REST API falló:', {
+      message: restApiError.message,
+      stack: restApiError.stack?.split('\n').slice(0, 3).join('\n')
+    });
+    
+    // MÉTODO 2: Fallback a JWT (más confiable pero no permite actualizaciones)
+    console.log('[createUserAndIssue] 🔄 Intentando fallback con JWT...');
+    
+    try {
+      google_save_url = await issueGoogleWalletLink({
+        cardCode: serial_number,
+        userName: user.name,
+        programName: biz.name || 'Loyalty Program',
+        businessId: business_id,
+        card_detail_id,
+        variant: finalCardType,
+        tier: tier || (finalCardType === 'points' ? 'Bronce' : undefined),
+        since: since || new Date().toISOString().slice(0, 10),
+        strips_collected: finalCardType === 'strips' ? 0 : undefined,
+        strips_required: finalCardType === 'strips' ? (userData.strips_required || 10) : undefined,
+        reward_title: finalCardType === 'strips' ? userData.reward_title : undefined,
+        isComplete: false,
+        colors: colors || {
+          background: design.background_color || biz.background_color || '#2d3436',
+          foreground: design.foreground_color || biz.foreground_color || '#E6E6E6'
+        },
+        barcode: barcode || { type: 'qr' }
+      });
+      
+      console.log('[createUserAndIssue] ✓ JWT fallback exitoso:', {
+        url: google_save_url,
+        method: 'jwt'
+      });
+      
+    } catch (jwtError) {
+      console.error('[createUserAndIssue] ❌ JWT fallback también falló:', {
+        message: jwtError.message
+      });
+      google_save_url = null;
+    }
   }
 
   // 6.2) Apple Wallet - URL para obtener el .pkpass
@@ -297,18 +327,26 @@ const createUserAndIssueProcess = async ({
   const typeId = process.env.PASS_TYPE_IDENTIFIER;
   const apple_pkpass_url = `${base}/api/v1/wallets/v1/passes/${encodeURIComponent(typeId)}/${serial_number}`;
 
+  console.log('[createUserAndIssue] URLs generadas:', {
+    google: google_save_url ? '✓' : '✗',
+    apple: apple_pkpass_url ? '✓' : '✗'
+  });
+
   /* ====== 7. GUARDAR URL DE GOOGLE WALLET ====== */
   if (google_save_url) {
     try {
       await usersService.saveUserWallet({
         userId: user.id,
         loyalty_account_id,
-        wallet_url: google_save_url
+        wallet_url: google_save_url,
+        google_object_id: googleObjectId
       });
+      console.log('[createUserAndIssue] ✓ Google Wallet URL guardada');
     } catch (saveError) {
-      console.error('[createUserAndIssue] Error guardando wallet URL:', saveError);
-      // No fallar todo el proceso
+      console.error('[createUserAndIssue] ⚠️ Error guardando wallet URL:', saveError.message);
     }
+  } else {
+    console.warn('[createUserAndIssue] ⚠️ No se pudo crear Google Wallet, solo disponible Apple Wallet');
   }
 
   /* ====== 8. CONSTRUIR RESPUESTA ====== */
@@ -316,6 +354,7 @@ const createUserAndIssueProcess = async ({
     user: {
       id: user.id,
       business_id: user.business_id,
+      card_detail_id: user.card_detail_id,
       name: user.name,
       email: user.email,
       phone: user.phone,
@@ -326,16 +365,17 @@ const createUserAndIssueProcess = async ({
       card_detail_id: design.id,
       loyalty_account_id,
       card_type: finalCardType,
-      variant: finalCardType // Para compatibilidad
+      variant: finalCardType
     },
     wallet: {
       google_save_url: google_save_url || null,
+      google_object_id: googleObjectId || null,
       apple_pkpass_url,
-      apple_auth_header: `ApplePass ${apple_auth_token}`
+      apple_auth_header: `ApplePass ${apple_auth_token}`,
+      google_method: google_save_url ? (googleObjectId ? 'rest_api' : 'jwt') : null
     }
   };
 
-  // Agregar información específica según el tipo de tarjeta
   if (finalCardType === 'strips') {
     response.user.strips_collected = user.strips_collected || 0;
     response.user.strips_required = user.strips_required || stripsRequired || 10;
@@ -349,20 +389,16 @@ const createUserAndIssueProcess = async ({
       isComplete: false
     };
   } else {
-    // Tarjeta de puntos - incluir tier si existe
-    if (tier) {
-      response.user.tier = tier;
-    }
-    if (since) {
-      response.user.since = since;
-    }
+    if (tier) response.user.tier = tier;
+    if (since) response.user.since = since;
   }
 
-  console.log('[createUserAndIssue] Proceso completado:', {
+  console.log('[createUserAndIssue] ✅ Proceso completado:', {
     userId: user.id,
     cardType: finalCardType,
     hasGoogleUrl: !!google_save_url,
-    hasAppleUrl: !!apple_pkpass_url
+    hasAppleUrl: !!apple_pkpass_url,
+    googleObjectId: googleObjectId || 'N/A'
   });
 
   return response;
@@ -370,7 +406,6 @@ const createUserAndIssueProcess = async ({
 
 /* ====================== CAMBIAR DISEÑO DE USUARIO ====================== */
 const changeUserDesignProcess = async ({ user_id, card_detail_id }) => {
-  // Carga user
   const user = await usersService.getOneUser(user_id);
   if (!user) {
     const err = new Error('Usuario no existe');
@@ -378,7 +413,6 @@ const changeUserDesignProcess = async ({ user_id, card_detail_id }) => {
     throw err;
   }
 
-  // Valida nuevo diseño contra su negocio
   const design = await carddetailService.getOneCardDetails(card_detail_id);
   if (!design || Number(design.business_id) !== Number(user.business_id)) {
     const err = new Error('card_detail_id inválido para el negocio del usuario');
@@ -386,7 +420,6 @@ const changeUserDesignProcess = async ({ user_id, card_detail_id }) => {
     throw err;
   }
 
-  // Actualiza y marca updated_at para que iOS refresque
   await usersService.updateUser(user.id, {
     card_detail_id: design.id,
     updated_at: new Date()
@@ -398,9 +431,6 @@ const changeUserDesignProcess = async ({ user_id, card_detail_id }) => {
     newDesignId: design.id
   });
 
-  // TODO: Notificar APNs para refrescar
-  // await walletProcess.pushRefresh(user.serial_number);
-
   return true;
 };
 
@@ -409,113 +439,37 @@ module.exports = {
   changeUserDesignProcess
 };
 
-/* ====================== EJEMPLOS DE USO ====================== 
+/* ====================== NOTAS DE DEBUGGING ====================== 
 
-═══════════════════════════════════════════════════════════════════════
-CREAR USUARIO CON TARJETA DE PUNTOS
-═══════════════════════════════════════════════════════════════════════
+Si ves "Billetera de Google - Ocurrió un error", revisa los logs:
 
-const result = await createUserAndIssueProcess({
-  business_id: 1,
-  name: "Juan Pérez",
-  email: "juan@example.com",
-  phone: "123456789",
-  card_detail_id: 5,
-  variant: "points",
-  points: 100,
-  tier: "Oro",
-  since: "2024-01-15",
-  colors: {
-    background: "#2d3436",
-    foreground: "#E6E6E6"
-  }
-});
+1. [createUserAndIssue] Intentando REST API...
+   ✓ REST API exitoso → El objeto se creó correctamente
+   ✗ REST API falló → Revisar configuración (clase, logo, permisos)
 
-Respuesta:
-{
-  "user": {
-    "id": 123,
-    "business_id": 1,
-    "name": "Juan Pérez",
-    "email": "juan@example.com",
-    "phone": "123456789",
-    "points": 100,
-    "serial_number": "a1b2c3d4-...",
-    "apple_auth_token": "abc123...",
-    "apple_pass_type_id": "pass.mx.windoe.loyalty",
-    "card_detail_id": 5,
-    "loyalty_account_id": "CARD-1-A1B2C3D4",
-    "card_type": "points",
-    "variant": "points",
-    "tier": "Oro",
-    "since": "2024-01-15"
-  },
-  "wallet": {
-    "google_save_url": "https://pay.google.com/gp/v/save/...",
-    "apple_pkpass_url": "https://api.example.com/api/v1/wallets/v1/passes/...",
-    "apple_auth_header": "ApplePass abc123..."
-  }
-}
+2. [createUserAndIssue] 🔄 Intentando fallback con JWT...
+   ✓ JWT exitoso → Tarjeta creada con JWT (funciona pero no se puede actualizar)
+   ✗ JWT falló → Problema de configuración crítico
 
-═══════════════════════════════════════════════════════════════════════
-CREAR USUARIO CON TARJETA DE STRIPS
-═══════════════════════════════════════════════════════════════════════
+3. URLs generadas:
+   google: ✓ → URL creada correctamente
+   google: ✗ → Ambos métodos fallaron
 
-const result = await createUserAndIssueProcess({
-  business_id: 9,
-  name: "test strip",
-  email: "test@test.com",
-  phone: "123456789",
-  card_detail_id: 11,
-  variant: "strips",
-  stripsRequired: 8,
-  rewardTitle: "Café Gratis",
-  rewardDescription: "Un café americano gratis por completar tu colección"
-});
+Causas comunes de error:
+- Clase no existe para el businessId
+- Logo no es HTTPS
+- Service Account JSON inválido
+- Permisos insuficientes
+- businessId incorrecto
 
-Respuesta:
-{
-  "user": {
-    "id": 41,
-    "business_id": 9,
-    "name": "test strip",
-    "email": "test@test.com",
-    "phone": "123456789",
-    "points": 0,
-    "serial_number": "a17d8458-a192-4a1b-a25b-c05a96a8d6ed",
-    "apple_auth_token": "bda614fc69b91f94976bc53667fbd015",
-    "apple_pass_type_id": "pass.mx.windoe.loyalty",
-    "card_detail_id": 11,
-    "loyalty_account_id": "CARD-9-A17D8458",
-    "card_type": "strips",
-    "variant": "strips",
-    "strips_collected": 0,
-    "strips_required": 8,
-    "reward_title": "Café Gratis",
-    "reward_description": "Un café americano gratis por completar tu colección"
-  },
-  "wallet": {
-    "google_save_url": "https://pay.google.com/gp/v/save/...",
-    "apple_pkpass_url": "https://wallet-app-backend.fly.dev/api/v1/wallets/v1/passes/...",
-    "apple_auth_header": "ApplePass bda614fc69b91f94976bc53667fbd015"
-  },
-  "strips_info": {
-    "required": 8,
-    "collected": 0,
-    "reward": "Café Gratis",
-    "isComplete": false
-  }
-}
+Solución rápida:
+1. Verificar que la clase existe:
+   POST /api/wallets/google/ensure { businessId: 9, programName: "Test", ... }
 
-═══════════════════════════════════════════════════════════════════════
-CAMBIAR DISEÑO DE TARJETA EXISTENTE
-═══════════════════════════════════════════════════════════════════════
+2. Probar JWT directamente:
+   POST /api/wallets/google { cardCode: "TEST", businessId: 9, variant: "strips", ... }
 
-const result = await changeUserDesignProcess({
-  user_id: 123,
-  card_detail_id: 10
-});
-
-Respuesta: true
+3. Si JWT funciona pero REST API no → problema con la clase/objeto
+4. Si JWT también falla → problema con Service Account o configuración base
 
 */

@@ -376,6 +376,18 @@ const createDesignWithStripsImages = async (req, res) => {
   }
 };
 
+const getActiveCardByBusiness = async (req, res) => {
+  try {
+    const { business_id } = req.params; 
+    if (!business_id) return res.status(401).json({ error: 'Business id requerido'}); 
+    const design = carddetailProcess.getActiveCardByBusiness(businessProcess); 
+    if (!design) return res.status(404).json({ error: 'Diseño no encontrado'}); 
+    return res.status(200).json(design); 
+
+  } catch (error) {
+    return res.status(502).json({ error: 'Error al obtener el diseño activo '})
+  }
+}
 module.exports = {
     getAllCardDetails,
     getOneCardDetails,
@@ -384,6 +396,7 @@ module.exports = {
     deleteCardDetails, 
     getAllCardsByBusiness, 
     getOneCardByBusiness,
+    getActiveCardByBusiness,
     generateQR, 
     createDesignUnified, 
     updateDesignUnified, 

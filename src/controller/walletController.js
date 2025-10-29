@@ -548,6 +548,35 @@ async function addToAppleWallet(req, res) {
   }
 }
 
+
+// funcion de debug 
+// En walletController.js
+const debugGoogleObject = async (req, res) => {
+  try {
+    const { getAccessToken } = require('../services/googleWalletService');
+    const objectId = '3388000000022968363.b86e60a1-995e-41c5-af17-25eec10b0d28';
+    
+    const accessToken = await getAccessToken();
+    const BASE_URL = 'https://walletobjects.googleapis.com/walletobjects/v1';
+    
+    // GET objeto
+    const objResp = await fetch(`${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const object = await objResp.json();
+    
+    // GET clase
+    const classResp = await fetch(`${BASE_URL}/loyaltyClass/${encodeURIComponent(object.classId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const classObj = await classResp.json();
+    
+    return res.json({ object, classObj });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
 /* ====================== EXPORTS ====================== */
 module.exports = {
   // Google Wallet - Múltiples métodos
@@ -560,7 +589,10 @@ module.exports = {
   debugGoogle,               // Debug JWT
   
   // Apple Wallet
-  addToAppleWallet          // Sin cambios
+  addToAppleWallet,         // Sin cambios
+
+  // debug 
+  debugGoogleObject
 };
 
 /* ====================== EJEMPLOS DE USO EN RUTAS ====================== 

@@ -179,6 +179,59 @@ const updateMeta = async (id, { pass_type_id, terms }) => {
   return rows[0] || null;
 };
 
+const getActiveCardByBusiness = async (business_id) => {
+    return new Promise(async (resolve, reject) => {
+        // Primero intentar obtener el diseño activo configurado
+        const sql = `
+            SELECT 
+                cd.id, 
+                cd.business_id, 
+                cd.pass_type_id, 
+                cd.terms,
+                cd.logo_url,
+                cd.strip_image_url,
+                cd.design_json,
+                cd.created_at, 
+                cd.updated_at
+            FROM card_details cd
+            INNER JOIN businesses b ON b.default_card_detail_id = cd.id
+            WHERE b.id = $1
+            LIMIT 1
+        `; 
+        
+        pool.query(sql, [business_id], (error, results) => {
+            if(error) return reject(error);
+            
+            // Si no hay diseño activo configurado, obtener el más reciente
+            if (results.rows.length === 0) {
+                console.log(`[getActiveCardByBusiness] No hay default_card_detail_id para business ${business_id}, usando más reciente`);
+                const fallbackSql = `
+                    SELECT 
+                        id, 
+                        business_id, 
+                        pass_type_id, 
+                        terms,
+                        logo_url,
+                        strip_image_url,
+                        design_json,
+                        created_at, 
+                        updated_at
+                    FROM card_details 
+                    WHERE business_id = $1 
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                `;
+                pool.query(fallbackSql, [business_id], (err2, res2) => {
+                    if(err2) return reject(err2);
+                    resolve(res2.rows);
+                });
+            } else {
+                resolve(results.rows);
+            }
+        }); 
+    }); 
+}
+
 
 module.exports = {
     getAllCardDetails,
@@ -188,6 +241,7 @@ module.exports = {
     deleteCardDetails, 
     getAllCardsByBusiness, 
     getOneCardByBusiness, 
+    getActiveCardByBusiness,
     createUnifiedDesign, 
     updateUnifiedDesign, 
     deleteByIdBusiness, 

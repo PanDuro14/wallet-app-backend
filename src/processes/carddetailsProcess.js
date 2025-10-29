@@ -54,6 +54,10 @@ const updateMeta = async (id, partial) => {
   return cardDetalService.updateMeta({ id, ...partial });
 };
 
+const getActiveCardByBusiness = async(business_id) => {
+    const cardDetail = await cardDetalService.getActiveCardByBusiness(business_id); 
+    return cardDetail; 
+}
 
 module.exports = {
     getAllCardDetails,
@@ -63,6 +67,7 @@ module.exports = {
     deleteCardDetails, 
     getAllCardsByBusiness, 
     getOneCardByBusiness,
+    getActiveCardByBusiness,
     generateQR, 
     deleteByIdBusiness, 
     updateMeta

@@ -46,6 +46,11 @@ const updateMeta = ({ id, pass_type_id, terms }) => {
   return cardDetailDb.updateMeta(id, { pass_type_id, terms });
 };
 
+const getActiveCardByBusiness = async(business_id) => {
+    const cardDetail = await cardDetailDb.getActiveCardByBusiness(business_id); 
+    return cardDetail; 
+}
+
 module.exports = {
     getAllCardDetails,
     getOneCardDetails,
@@ -54,6 +59,7 @@ module.exports = {
     deleteCardDetails, 
     getAllCardsByBusiness, 
     getOneCardByBusiness, 
+    getActiveCardByBusiness,
     createUnifiedDesign, 
     updateUnifiedDesign, 
     deleteByIdBusiness, 

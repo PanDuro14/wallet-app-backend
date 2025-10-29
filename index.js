@@ -55,6 +55,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor escuchando en: ${PORT}`);
 });
 
+app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+
 
 // Routing
 const v1Business = require('./src/v1/routes/businessRoutes');
@@ -63,12 +66,37 @@ const v1Users = require('./src/v1/routes/usersRoutes');
 const v1Wallets = require('./src/v1/routes/walletRoutes'); 
 const onboardingRoutes = require('./src/v1/routes/onboardingRoutes');
 const v1Admin = require('./src/v1/routes/adminRoutes');
+const v1Assets = require('./src/v1/routes/assetsRoutes'); 
+//const publicAssets = require('./routes/publicAssets');
 app.use('/api/v1/business', v1Business);
 app.use('/api/v1/cards', v1CardDetails); 
 app.use('/api/v1/users', v1Users); 
 app.use('/api/v1/wallets', v1Wallets); 
 app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/admin', v1Admin);
+app.use('/api/v1/assets', v1Assets); 
+//app.use('/api/public/assets', publicAssets);
+
+const businessesProcess = require('./src/processes/businessProcess');
+
+app.get('/api/public/assets/logo/:businessId', async (req, res) => {
+  const businessId = req.params.businessId;
+  const bizRes = await businessesProcess.getOneBusiness(businessId);
+  const biz = Array.isArray(bizRes) ? bizRes[0] : bizRes;
+
+  const buffer =
+    biz?.logoBuffer ||
+    biz?.logo ||
+    biz?.image ||
+    biz?.logo_png ||
+    null;
+
+  if (!buffer) return res.status(404).send('No logo found');
+
+  res.setHeader('Content-Type', 'image/png');
+  res.send(buffer);
+});
+
 
 // Ruta de prueba
 app.get('/', (req, res) => {
@@ -143,6 +171,8 @@ app.get('/wallet/internal/passes/:serial/notify', async (req, res) => {
 app.use('/public', express.static(path.join(process.cwd(), 'public'), {
   maxAge: '7d', etag: true, immutable: false
 }));
+
+
 
 
 // apt update && apt install -y postgresql-client

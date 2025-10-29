@@ -60,7 +60,7 @@ function pickAnyBuffer(obj, keys = []) {
 
 /* ====================== LOAD BRAND ASSETS (sin cambios) ====================== */
 async function loadBrandAssets(businessId) {
-  const cdRes  = await carddetailsProcess.getOneCardByBusiness(businessId);
+  const cdRes  = await carddetailsProcess.getActiveCardByBusiness(businessId);
   const bizRes = await businessesProcess.getOneBusiness(businessId);
 
   const cd  = firstOrNull(cdRes);
@@ -90,20 +90,40 @@ async function loadBrandAssets(businessId) {
     pickAnyBuffer(biz, ['strip_imageBuffer','stripBuffer','strip','strip_image','strip_png']) ||
     null;
 
-  // Colores/nombre
+  // ✅ LEER design_json
+  let designJson = {};
+  if (cd?.design_json) {
+    // Si es string, parsearlo; si es objeto, usarlo directo
+    if (typeof cd.design_json === 'string') {
+      try {
+        designJson = JSON.parse(cd.design_json);
+      } catch (e) {
+        console.warn('[Load Brand Assets] No se pudo parsear design_json:', e.message);
+      }
+    } else if (typeof cd.design_json === 'object') {
+      designJson = cd.design_json;
+    }
+  }
+  
+  // Colores/nombre - prioridad: design_json > campos directos
   const programName =
+    designJson.programName ||
     (cd && (cd.program_name || cd.programName)) ||
     (biz && biz.name) || 'Loyalty';
 
-  const bg = (cd && (cd.background_color || cd.bg || cd.backgroundColor)) ||
-             (biz && (biz.background_color || biz.bg || biz.backgroundColor)) ||
-             '#2d3436';
+  const bg = 
+    designJson.colors?.background ||
+    (cd && (cd.background_color || cd.bg || cd.backgroundColor)) ||
+    (biz && (biz.background_color || biz.bg || biz.backgroundColor)) ||
+    '#2d3436';
 
-  const fg = (cd && (cd.foreground_color || cd.fg || cd.foregroundColor)) ||
-             (biz && (biz.foreground_color || biz.fg || biz.foregroundColor)) ||
-             '#E6E6E6';
+  const fg = 
+    designJson.colors?.foreground ||
+    (cd && (cd.foreground_color || cd.fg || cd.foregroundColor)) ||
+    (biz && (biz.foreground_color || biz.fg || biz.foregroundColor)) ||
+    '#E6E6E6';
 
-  console.log('[Load Brand Assets]', {
+  console.log('[Load Brand Assets] {', {
     businessId,
     isBizArray: Array.isArray(bizRes),
     isCdArray: Array.isArray(cdRes),
@@ -114,7 +134,15 @@ async function loadBrandAssets(businessId) {
     hasStripOff: !!stripOffBuffer,
     stripOnLen: stripOnBuffer?.length || 0,
     stripOffLen: stripOffBuffer?.length || 0,
-    stripGenericLen: stripBuffer?.length || 0
+    stripGenericLen: stripBuffer?.length || 0,
+    colors: { bg, fg },
+    rawDesignJson: cd?.design_json, // ← Ver qué viene de BD
+    designJson: {
+      hasDesign: !!cd?.design_json,
+      programName: designJson.programName,
+      colors: designJson.colors,
+      disableStrip: designJson.assets?.disableStrip
+    }
   });
 
   return { 
@@ -125,6 +153,7 @@ async function loadBrandAssets(businessId) {
     programName, 
     bg, 
     fg,
+    designJson, // ✅ RETORNAR design_json completo
     // Alias para compatibilidad
     stripImageOn: stripOnBuffer,
     stripImageOff: stripOffBuffer
@@ -214,6 +243,7 @@ async function issueGoogleWalletLink({
   userName, 
   programName, 
   businessId,
+  card_detail_id,
   colors = {}, 
   assets = {}, 
   fields = {}, 
@@ -263,6 +293,7 @@ async function issueGoogleWalletLink({
   // 4) Asegurar CLASE
   await ensureLoyaltyClass({
     businessId,
+    card_detail_id,
     programName: effProg,
     hexBackgroundColor: hexBg,
     logoUri
@@ -280,6 +311,7 @@ async function issueGoogleWalletLink({
     cardCode,
     userName,
     businessId,
+    card_detail_id,
     brand: { programName: effProg, bg: hexBg, logoUri },
     barcode: { type, value, alternateText },
     // Nuevos parámetros para variantes
@@ -304,6 +336,7 @@ async function createGoogleWalletObject({
   userName,
   programName,
   businessId,
+  card_detail_id,
   colors = {},
   assets = {},
   barcode = {},
@@ -327,16 +360,33 @@ async function createGoogleWalletObject({
     variant,
     points,
     strips_collected,
-    strips_required
+    strips_required,
+    colors
   });
 
-  // 1) Cargar branding
-  const { logoBuffer, programName: pn, bg } = await loadBrandAssets(businessId);
+  // 1) Cargar branding desde BD
+  const { 
+    logoBuffer, 
+    stripOnBuffer,      // ✅ Extraer strips
+    stripOffBuffer,     // ✅ Extraer strips
+    programName: pn, 
+    bg, 
+    fg,
+    designJson          // ✅ Extraer design_json
+  } = await loadBrandAssets(businessId);
 
-  // 2) Assets/colores efectivos
-  const logoBuf = assets.logo || logoBuffer || null;
-  const hexBg = (colors.background || bg || '#2d3436').toString().trim();
+  // 2) Assets/colores efectivos (request > BD > defaults)
+  const logoBuf = assets.logo || logoBuffer || null; 
+  const hexBg = colors?.background || bg || '#2d3436';
+  const hexFg = colors?.foreground || fg || '#E6E6E6';
   const effProg = programName || pn || 'Loyalty';
+
+  console.log('[createGoogleWalletObject] Colores a usar:', {
+    background: hexBg,
+    foreground: hexFg,
+    source: colors?.background ? 'request' : (bg ? 'database' : 'default'),
+    disableStrip: designJson?.assets?.disableStrip
+  });
 
   // 3) Subir logo a HTTPS
   let logoUri = null;
@@ -354,12 +404,19 @@ async function createGoogleWalletObject({
     if (fb && isHttps(fb)) logoUri = fb;
   }
 
-  // 4) Asegurar clase
+  // 4) Asegurar clase con colores
   await ensureLoyaltyClass({
     businessId,
+    card_detail_id,
     programName: effProg,
     hexBackgroundColor: hexBg,
+    hexForegroundColor: hexFg, // ✅ Pasar color de texto
     logoUri
+  });
+
+  console.log('[createGoogleWalletObject] Clase asegurada con colores:', {
+    hexBg,
+    hexFg
   });
 
   // 5) Normalizar variante
@@ -373,10 +430,11 @@ async function createGoogleWalletObject({
   );
   const barcodeValue = barcode.message || barcode.value || cardCode;
 
-  // 7) Crear/actualizar objeto con REST API
+  // 7) Crear/actualizar objeto con REST API - AHORA CON COLORES Y STRIPS
   const result = await createOrUpdateLoyaltyObject({
     cardCode,
     businessId,
+    card_detail_id,
     userName,
     programName: effProg,
     points,
@@ -394,7 +452,13 @@ async function createGoogleWalletObject({
     strips_collected,
     strips_required,
     reward_title,
-    isComplete
+    isComplete,
+    // ✅ COLORES AGREGADOS
+    hexBackgroundColor: hexBg,
+    hexForegroundColor: hexFg,
+    // ✅ STRIPS IMAGES AGREGADOS (solo si no está deshabilitado)
+    stripImageOn: designJson?.assets?.disableStrip ? null : stripOnBuffer,
+    stripImageOff: designJson?.assets?.disableStrip ? null : stripOffBuffer
   });
 
   console.log('[createGoogleWalletObject] Objeto creado/actualizado:', result);
@@ -447,89 +511,3 @@ module.exports = {
   loadBrandAssets,
   sanityLog
 };
-
-/* ====================== EJEMPLOS DE USO ====================== 
-
-// ===== APPLE WALLET (sin cambios) =====
-const appleBuffer = await issueAppleWalletPkpass({
-  businessId: 1,
-  cardCode: 'ABC123',
-  userName: 'Juan Pérez',
-  points: 100,
-  variant: 'points'
-});
-
-// ===== GOOGLE WALLET - MÉTODO 1: REST API (Recomendado) =====
-
-// Tarjeta de puntos
-const googlePoints = await issueGoogleWallet({
-  businessId: 1,
-  cardCode: 'GGL001',
-  userName: 'María López',
-  programName: 'Mi Programa',
-  variant: 'points',
-  points: 250,
-  tier: 'Oro',
-  since: '2024-01-15',
-  useRestApi: true // ← Usa REST API (default)
-});
-// Retorna: { url: 'https://pay.google.com/...', objectId: '...', existed: false, method: 'rest_api' }
-
-// Tarjeta de strips
-const googleStrips = await issueGoogleWallet({
-  businessId: 2,
-  cardCode: 'GGL002',
-  userName: 'Pedro Gómez',
-  programName: 'Café Rewards',
-  variant: 'strips',
-  strips_collected: 7,
-  strips_required: 10,
-  reward_title: 'Café gratis',
-  isComplete: false,
-  useRestApi: true
-});
-
-// ===== GOOGLE WALLET - MÉTODO 2: JWT Legacy =====
-const googleLegacy = await issueGoogleWallet({
-  businessId: 1,
-  cardCode: 'GGL003',
-  userName: 'Ana Torres',
-  programName: 'SuperMercado',
-  variant: 'points',
-  points: 500,
-  useRestApi: false // ← Usa JWT legacy
-});
-// Retorna: { url: 'https://pay.google.com/gp/v/save/...', method: 'jwt_legacy' }
-
-// ===== GOOGLE WALLET - MÉTODO 3: REST API Directo =====
-const googleDirect = await createGoogleWalletObject({
-  businessId: 3,
-  cardCode: 'GGL004',
-  userName: 'Luis Ramírez',
-  programName: 'Premium Club',
-  variant: 'strips',
-  strips_collected: 10,
-  strips_required: 10,
-  reward_title: 'Descuento 20%',
-  isComplete: true
-});
-// Retorna: { objectId: '...', existed: false }
-
-// ===== ACTUALIZAR EXISTENTE =====
-// Si llamas a createGoogleWalletObject con un cardCode existente,
-// se actualiza automáticamente (PUT en lugar de POST)
-
-const updated = await createGoogleWalletObject({
-  businessId: 2,
-  cardCode: 'GGL002', // ← Ya existe
-  userName: 'Pedro Gómez',
-  programName: 'Café Rewards',
-  variant: 'strips',
-  strips_collected: 8, // ← Actualizado
-  strips_required: 10,
-  reward_title: 'Café gratis',
-  isComplete: false
-});
-// Retorna: { objectId: '...', existed: true }
-
-*/

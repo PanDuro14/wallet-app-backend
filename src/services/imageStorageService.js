@@ -2,7 +2,7 @@ const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:8080';
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'https://your-production-url.com'; // Debe ser HTTPS
 
 function isPNG(buf) {
   return Buffer.isBuffer(buf)
@@ -23,9 +23,17 @@ async function saveBufferAsPublicPNG({ businessId, kind, buffer }) {
   const sha1 = crypto.createHash('sha1').update(buffer).digest('hex').slice(0, 16);
   const name = `${kind || 'asset'}-${sha1}.png`;
   const filePath = path.join(dir, name);
-  try { await fsp.access(filePath); } catch { await fsp.writeFile(filePath, buffer); }
 
-  return `${PUBLIC_BASE_URL}/public/uploads/${businessId}/${name}`;
+  try {
+    await fsp.access(filePath);
+  } catch {
+    await fsp.writeFile(filePath, buffer);
+  }
+
+  return {
+    publicUrl: `${PUBLIC_BASE_URL}/public/uploads/${businessId}/${name}`
+  };
+
 }
 
 module.exports = { saveBufferAsPublicPNG };
