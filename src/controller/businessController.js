@@ -101,26 +101,83 @@ const createBusiness = async (req, res) => {
 const updateBusiness = async (req, res) => {
   try {
     const { id } = req.params; 
-    const { name, email, password, created_at, updated_at } = req.body; 
-    const logoBuffer = req.files['logo'] ? req.files['logo'][0].buffer : null;
-    const stripImageOnBuffer  = req.files['strip_image_on'] ? req.files['strip_image_on'][0].buffer : null;
-    const stripImageOffBuffer = req.files['strip_image_off'] ? req.files['strip_image_off'][0].buffer : null;
+    const { name, email, password } = req.body; 
 
-    // Verificar en los logs si las imágenes se han recibido correctamente
-    console.log('Logo:', logoBuffer ? 'Imagen recibida' : 'No se recibió logo');
-    console.log('Strip Image On:', stripImageOnBuffer ? 'Imagen recibida' : 'No se recibió strip_image_on');
-    console.log('Strip Image Off:', stripImageOffBuffer ? 'Imagen recibida' : 'No se recibió strip_image_off');
+    // ✅ Construir objeto de updates solo con los campos presentes
+    const updates = {};
 
-    const data = await businessesProcess.updateBusiness(id, name, email, password, logoBuffer, stripImageOnBuffer, stripImageOffBuffer, created_at, updated_at)
+    // Campos de texto
+    if (name !== undefined && name !== null && name.trim() !== '') {
+      updates.name = name.trim();
+      console.log('[updateBusiness] ✓ Nombre a actualizar:', updates.name);
+    }
+
+    if (email !== undefined && email !== null && email.trim() !== '') {
+      updates.email = email.toLowerCase().trim();
+      console.log('[updateBusiness] ✓ Email a actualizar:', updates.email);
+    }
+
+    if (password !== undefined && password !== null && password.trim() !== '') {
+      updates.password = password.trim();
+      console.log('[updateBusiness] ✓ Password a actualizar: [OCULTO]');
+    }
+
+    // Archivos/Imágenes (buffers)
+    if (req.files?.['logo']?.[0]) {
+      updates.logo = req.files['logo'][0].buffer;
+      console.log('[updateBusiness] ✓ Logo a actualizar:', updates.logo.length, 'bytes');
+    }
+
+    if (req.files?.['strip_image_on']?.[0]) {
+      updates.strip_image_on = req.files['strip_image_on'][0].buffer;
+      console.log('[updateBusiness] ✓ Strip image ON a actualizar:', updates.strip_image_on.length, 'bytes');
+    }
+
+    if (req.files?.['strip_image_off']?.[0]) {
+      updates.strip_image_off = req.files['strip_image_off'][0].buffer;
+      console.log('[updateBusiness] ✓ Strip image OFF a actualizar:', updates.strip_image_off.length, 'bytes');
+    }
+
+    // Verificar que hay algo que actualizar
+    if (Object.keys(updates).length === 0) {
+      console.log('[updateBusiness] ⚠️ No se recibieron campos para actualizar');
+      return res.status(400).json({ 
+        error: 'No se especificaron campos para actualizar',
+        hint: 'Envía al menos un campo: name, email, password, logo, strip_image_on, strip_image_off'
+      });
+    }
+
+    console.log('[updateBusiness] Campos a actualizar:', Object.keys(updates));
+
+    // Actualizar
+    const data = await businessesProcess.updateBusiness(id, updates);
   
     if (!data) {
       return res.status(404).json({ error: 'Negocio no encontrado' });
     }
 
-    res.status(200).json({ message: 'Negocio actualizado con éxito', data });
+    // Responder sin incluir buffers binarios en el JSON
+    const response = {
+      message: 'Negocio actualizado con éxito',
+      updated_fields: Object.keys(updates),
+      business: {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        has_logo: !!data.logo,
+        has_strip_on: !!data.strip_image_on,
+        has_strip_off: !!data.strip_image_off,
+        updated_at: data.updated_at
+      }
+    };
+
+    res.status(200).json(response);
   } catch (error) {
-    console.error('Error al update el negocio:', error); 
-    res.status(502).json({ error: 'Error al actualizar el negocio', details: error.message });
+    console.error('[updateBusiness] Error:', error); 
+    res.status(502).json({ 
+      error: 'Error al actualizar el negocio', 
+      details: error.message 
+    });
   }
 };
 

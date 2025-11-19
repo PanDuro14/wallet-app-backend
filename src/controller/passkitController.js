@@ -15,6 +15,7 @@ const { notifyWallet } = require('../services/apnsService');
 const { createPkPassBuffer } = require('../services/appleWalletService');
 const cardSvc = require('../services/carddetailService');
 const { resolveDesignForUser } = require('../utils/design');
+const notificationService = require('../services/notificationService');
 
 // ========== IMPORTACIÓN DEL SERVICIO DE STRIPS ==========
 const { generateStripsImage } = require('../services/stripsImageService');
@@ -157,6 +158,17 @@ const bumpPoints = async (req, res) => {
     const upd = await bumpPointsBySerial(serial, delta);
     if (!upd) return res.sendStatus(404);
 
+    // Enivar la notificacion de puntos 
+    try {
+      await notificationService.sendAppleWalletNotification(
+        serial, row.id, upd.points, row.lang || 'en'
+      ); 
+      console.log(`[passkitController: bumpPoints] Notificacion enviada para el serial ${serial}: ${upd.points} puntos`); 
+    } catch (notifError){
+      console.error(' [passkitController: bumpPoints] Error enviado notificacion: ', notifError.message); 
+    }
+
+
     let notified = 0;
     if (process.env.APNS_ENABLED === 'true') {
       const tokens = await listPushTokensBySerial(serial);
@@ -244,7 +256,33 @@ const grantStrip = async (req, res) => {
     const data = updated.data;
     const isComplete = data.strips_collected >= data.strips_required;
 
-    // Notificar con APNs
+    // ✅ ENVIAR NOTIFICACIÓN CORREGIDA
+    try {
+      if (isComplete) {
+        // Completó colección
+        await notificationService.sendCompletionNotification(
+          serial, 
+          row.id, 
+          'strips', 
+          row.lang || 'es'
+        ); 
+        console.log(`grantStrip] Notificación de COMPLETACIÓN enviada para serial ${serial}`); 
+      } else {
+        // ✅ FIX: Pasar NÚMEROS, no strings
+        await notificationService.sendStripsUpdateNotification(
+          serial, 
+          row.id, 
+          data.strips_collected,  
+          data.strips_required,   
+          row.lang || 'es'
+        ); 
+        console.log(`[grantStrip] Notificación de PROGRESO enviada para serial ${serial} (${data.strips_collected}/${data.strips_required})`); 
+      }
+    } catch (notifError) {
+      console.error(`[grantStrip] Error enviando notificación:`, notifError.message); 
+    }
+
+    // Notificar con APNs (silent push)
     let notified = 0;
     if (process.env.APNS_ENABLED === 'true') {
       const tokens = await listPushTokensBySerial(serial);

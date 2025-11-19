@@ -83,19 +83,119 @@ const createBusiness = async (name, email, password, logoBuffer, stripImageOn, s
 };
 
 // Actualizar negocio por ID
-const updateBusiness = async (id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) => {
-  return new Promise((resolve, reject) => {
+const updateBusiness = async (id, updates = {}) => {
+  return new Promise(async (resolve, reject) => {
     try {
-      const sql = `UPDATE businesses
-        SET name = $1, email = $2, password = $3, logo = $4, strip_image_on = $5, strip_image_off = $6, created_at = $7, updated_at = $8
-        WHERE id = $9`;
-
-      pool.query(sql, [name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at, id], (error, results) => {
+      // 1. Obtener el negocio actual primero
+      const getCurrentSql = 'SELECT * FROM businesses WHERE id = $1';
+      pool.query(getCurrentSql, [id], async (error, currentResults) => {
         if (error) {
-          console.error('Error al actualizar el negocio:', error);
-          return reject(error); 
+          console.error('Error al obtener el negocio actual:', error);
+          return reject(error);
         }
-        resolve('Business actualizado');
+
+        if (currentResults.rows.length === 0) {
+          return reject(new Error('Negocio no encontrado'));
+        }
+
+        const currentBusiness = currentResults.rows[0];
+        console.log('[updateBusiness] Negocio actual:', {
+          id: currentBusiness.id,
+          name: currentBusiness.name,
+          email: currentBusiness.email,
+          hasLogo: !!currentBusiness.logo,
+          hasStripOn: !!currentBusiness.strip_image_on,
+          hasStripOff: !!currentBusiness.strip_image_off
+        });
+
+        // 2. Construir campos a actualizar dinámicamente
+        const fieldsToUpdate = [];
+        const values = [];
+        let paramIndex = 1;
+
+        // Helper para agregar campo si existe
+        const addField = (fieldName, value, shouldHash = false) => {
+          if (value !== undefined && value !== null) {
+            fieldsToUpdate.push(`${fieldName} = $${paramIndex}`);
+            values.push(shouldHash ? value : value); // El hash se hace después si es password
+            paramIndex++;
+            return true;
+          }
+          return false;
+        };
+
+        // Agregar campos si están presentes
+        if (updates.name) {
+          addField('name', updates.name);
+          console.log('[updateBusiness] ✓ Actualizando nombre:', updates.name);
+        }
+
+        if (updates.email) {
+          addField('email', updates.email.toLowerCase());
+          console.log('[updateBusiness] ✓ Actualizando email:', updates.email);
+        }
+
+        // Password requiere hashing
+        if (updates.password) {
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash(updates.password, salt);
+          addField('password', hashedPassword);
+          console.log('[updateBusiness] ✓ Actualizando password (hasheada)');
+        }
+
+        if (updates.logo) {
+          addField('logo', updates.logo);
+          console.log('[updateBusiness] ✓ Actualizando logo:', updates.logo.length, 'bytes');
+        }
+
+        if (updates.strip_image_on) {
+          addField('strip_image_on', updates.strip_image_on);
+          console.log('[updateBusiness] ✓ Actualizando strip_image_on:', updates.strip_image_on.length, 'bytes');
+        }
+
+        if (updates.strip_image_off) {
+          addField('strip_image_off', updates.strip_image_off);
+          console.log('[updateBusiness] ✓ Actualizando strip_image_off:', updates.strip_image_off.length, 'bytes');
+        }
+
+        // Siempre actualizar updated_at
+        fieldsToUpdate.push(`updated_at = NOW()`);
+
+        // 3. Verificar que hay algo que actualizar
+        if (fieldsToUpdate.length === 1) { // Solo tiene updated_at
+          console.log('[updateBusiness] ⚠️ No hay campos para actualizar (solo updated_at)');
+          return resolve(currentBusiness);
+        }
+
+        // 4. Construir y ejecutar query
+        values.push(id); // ID siempre al final para WHERE
+        const sql = `
+          UPDATE businesses
+          SET ${fieldsToUpdate.join(', ')}
+          WHERE id = $${paramIndex}
+          RETURNING *
+        `;
+
+        console.log('[updateBusiness] SQL generado:', sql);
+        console.log('[updateBusiness] Valores:', values.map((v, i) => 
+          i === values.length - 1 ? `[ID: ${v}]` : 
+          Buffer.isBuffer(v) ? `[Buffer ${v.length} bytes]` : 
+          v
+        ));
+
+        pool.query(sql, values, (error, results) => {
+          if (error) {
+            console.error('Error al actualizar el negocio:', error);
+            return reject(error); 
+          }
+
+          if (results.rows.length === 0) {
+            return reject(new Error('No se pudo actualizar el negocio'));
+          }
+
+          console.log('[updateBusiness] ✅ Negocio actualizado exitosamente');
+          resolve(results.rows[0]);
+        });
       });
 
     } catch (err) {
@@ -103,24 +203,39 @@ const updateBusiness = async (id, name, email, password, logoBuffer, stripImageO
       reject(err);
     }
   });
-}
+};
 
 
 // Eliminar un negocio por ID
+// Eliminar un negocio por ID - ACTUALIZADO con user_strips_log
 const deleteBusiness = async (id) => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
-      const sql = 'DELETE FROM card_details WHERE business_id = $1';
+      // 1. Eliminar user_strips_log (depende de users)
+      await deleteAllUserStripsLogByBusiness(id);
+      // 2. Eliminar apple_wallet_registrations (depende de users)
+      await deleteAllAppleWalletRegistrationsByBusiness(id);  
+      // 3. Eliminar todos los usuarios/clientes
+      await deleteAllClientsByBusiness(id);
+      // 4. Eliminar todos los card_details
+      await deleteAllCardDetailsByBusiness(id);  
+      // 5. Finalmente eliminar el negocio
+      const sql = 'DELETE FROM businesses WHERE id = $1 RETURNING id, name';
       pool.query(sql, [id], (error, results) => {
-        if (error) return reject(error);
-        resolve('Negocio eliminado');
+        if (error) {
+          return reject(error);
+        }
+        if (results.rowCount === 0) {
+          return reject(new Error('Negocio no encontrado'));
+        }
+        resolve({
+          success: true,
+          message: 'Negocio y todos sus datos relacionados eliminados',
+          deletedBusiness: results.rows[0]
+        });
       });
-    } finally {
-      const sql = 'DELETE FROM businesses WHERE id = $1';
-      pool.query(sql, [id], (error, results) => {
-        if (error) return reject(error);
-        resolve('Negocio eliminado');
-      });
+    } catch (error) {
+      reject(error);
     }
   });
 };
@@ -175,6 +290,79 @@ async function updateCurrentDesignById(designId, businessId) {
   });
 }
 
+async function deleteAllClientsByBusiness(business_id) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      DELETE FROM users where business_id = $1; 
+    `; 
+    pool.query(sql, [business_id], (error, results) => {
+      if(error) return reject(error); 
+      resolve(' Clientes eliminados'); 
+    }); 
+  }); 
+}
+
+async function deleteOneClientByBusiness(id, business_id) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      DELETE FROM users WHERE business_id = $1 AND id = $2
+    `; 
+    // FIX: Cambié el segundo parámetro de 'reject' a 'results'
+    pool.query(sql, [business_id, id], (error, results) => {
+      if(error) return reject(error); 
+      console.log(`Cliente ${id} eliminado del negocio ${business_id}`);
+      resolve(results.rowCount); 
+    }); 
+  }); 
+}
+
+async function deleteAllCardDetailsByBusiness(business_id) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      DELETE FROM card_details WHERE business_id = $1
+    `; 
+    // FIX: Cambié el segundo parámetro de 'reject' a 'results'
+    pool.query(sql, [business_id], (error, results) => {
+      if(error) return reject(error);
+      console.log(`Card details eliminados del negocio ${business_id}: ${results.rowCount}`);
+      resolve(results.rowCount); 
+    }); 
+  });
+}
+
+async function deleteAllAppleWalletRegistrationsByBusiness(business_id) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      DELETE FROM apple_wallet_registrations 
+      WHERE user_id IN (
+        SELECT id FROM users WHERE business_id = $1
+      )
+    `; 
+    pool.query(sql, [business_id], (error, results) => {
+      if(error) return reject(error);
+      console.log(`Apple Wallet registrations eliminados del negocio ${business_id}: ${results.rowCount}`);
+      resolve(results.rowCount); 
+    }); 
+  }); 
+}
+
+async function deleteAllUserStripsLogByBusiness(business_id) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      DELETE FROM user_strips_log 
+      WHERE user_id IN (
+        SELECT id FROM users WHERE business_id = $1
+      )
+    `; 
+    pool.query(sql, [business_id], (error, results) => {
+      if(error) return reject(error);
+      console.log(`User strips log eliminados del negocio ${business_id}: ${results.rowCount}`);
+      resolve(results.rowCount); 
+    }); 
+  }); 
+}
+
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -184,5 +372,10 @@ module.exports = {
   deleteBusiness,
   getEmail,
   getCurrentDesignById, 
-  updateCurrentDesignById
+  updateCurrentDesignById, 
+  deleteAllClientsByBusiness, 
+  deleteOneClientByBusiness, 
+  deleteAllCardDetailsByBusiness,
+  deleteAllAppleWalletRegistrationsByBusiness, 
+  deleteAllUserStripsLogByBusiness
 };

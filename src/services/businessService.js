@@ -45,9 +45,9 @@ const createBusiness = async (name, email, password, logoBuffer, stripImageOn, s
 };
 
 // Actualizar un negocio por ID
-const updateBusiness = async (id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) => {
+const updateBusiness = async (id, updates) => {
   try {
-    const updatedBusiness = await businessDb.updateBusiness(id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at);
+    const updatedBusiness = await businessDb.updateBusiness(id, updates);
     return updatedBusiness;
   } catch (err) {
     throw new Error('Error al actualizar el negocio: ' + err.message);
@@ -77,6 +77,17 @@ const updateCurrentDesignById = async (designId, businessId) => {
   return businessDb.updateCurrentDesignById(designId, businessId); 
 };
 
+const deleteAllClientsByBusiness = async(business_id) => {
+  return businessDb.deleteAllClientsByBusiness(business_id); 
+}
+
+const deleteOneClientByBusiness = async(business_id, id) => {
+  return businessDb.deleteOneClientByBusiness(business_id, id);
+}
+
+const deleteAllCardDetailsByBusiness = async(business_id) =>{
+  return businessDb.deleteAllCardDetailsByBusiness(business_id); 
+}
 
 module.exports = {
   loginBusiness,
@@ -87,5 +98,9 @@ module.exports = {
   deleteBusiness,
   getEmail, 
   getCurrentDesignById, 
-  updateCurrentDesignById
+  updateCurrentDesignById, 
+
+  deleteAllClientsByBusiness, 
+  deleteOneClientByBusiness, 
+  deleteAllCardDetailsByBusiness
 };

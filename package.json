@@ -20,6 +20,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
@@ -30,11 +31,13 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "passkit-generator": "^3.4.0",
     "pg": "^8.16.3",
     "qrcode": "^1.5.4",
-    "sharp": "^0.34.4",
-    "uuid": "^11.1.0"
+    "sharp": "^0.34.5",
+    "uuid": "^11.1.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@flydotio/dockerfile": "^0.7.10",

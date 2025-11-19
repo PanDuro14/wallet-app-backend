@@ -12,6 +12,9 @@ const {
   issueGoogleWallet           // Wrapper unificado
 } = require('../processes/walletProcess');
 
+// ✅ NUEVO: Import para PWA URLs
+const pwaWalletService = require('../services/pwaWalletService');
+
 const pickFirst = (arr) => (Array.isArray(arr) && arr.length ? arr[0] : null);
 
 const ensureBusiness = async (business_id) => {
@@ -349,7 +352,11 @@ const createUserAndIssueProcess = async ({
     console.warn('[createUserAndIssue] ⚠️ No se pudo crear Google Wallet, solo disponible Apple Wallet');
   }
 
-  /* ====== 8. CONSTRUIR RESPUESTA ====== */
+  /* ====== 8. CONSTRUIR RESPUESTA CON PWA ====== */
+  
+  // ✅ NUEVO: Construir URLs de PWA
+  const pwaUrls = pwaWalletService.buildPwaUrls(serial_number);
+  
   const response = {
     user: {
       id: user.id,
@@ -368,11 +375,17 @@ const createUserAndIssueProcess = async ({
       variant: finalCardType
     },
     wallet: {
+      // Wallets nativos
       google_save_url: google_save_url || null,
       google_object_id: googleObjectId || null,
       apple_pkpass_url,
       apple_auth_header: `ApplePass ${apple_auth_token}`,
-      google_method: google_save_url ? (googleObjectId ? 'rest_api' : 'jwt') : null
+      google_method: google_save_url ? (googleObjectId ? 'rest_api' : 'jwt') : null,
+      
+      // ✅ NUEVO: PWA (funciona en todos los dispositivos)
+      pwa_wallet_url: pwaUrls.pwa,
+      pwa_install_url: pwaUrls.install,
+      pwa_share_url: pwaUrls.share
     }
   };
 
@@ -398,6 +411,7 @@ const createUserAndIssueProcess = async ({
     cardType: finalCardType,
     hasGoogleUrl: !!google_save_url,
     hasAppleUrl: !!apple_pkpass_url,
+    hasPwaUrl: !!pwaUrls.pwa, // ✅ Nuevo
     googleObjectId: googleObjectId || 'N/A'
   });
 
@@ -439,37 +453,12 @@ module.exports = {
   changeUserDesignProcess
 };
 
-/* ====================== NOTAS DE DEBUGGING ====================== 
+/* ====================== CHANGELOG PWA ====================== 
 
-Si ves "Billetera de Google - Ocurrió un error", revisa los logs:
-
-1. [createUserAndIssue] Intentando REST API...
-   ✓ REST API exitoso → El objeto se creó correctamente
-   ✗ REST API falló → Revisar configuración (clase, logo, permisos)
-
-2. [createUserAndIssue] 🔄 Intentando fallback con JWT...
-   ✓ JWT exitoso → Tarjeta creada con JWT (funciona pero no se puede actualizar)
-   ✗ JWT falló → Problema de configuración crítico
-
-3. URLs generadas:
-   google: ✓ → URL creada correctamente
-   google: ✗ → Ambos métodos fallaron
-
-Causas comunes de error:
-- Clase no existe para el businessId
-- Logo no es HTTPS
-- Service Account JSON inválido
-- Permisos insuficientes
-- businessId incorrecto
-
-Solución rápida:
-1. Verificar que la clase existe:
-   POST /api/wallets/google/ensure { businessId: 9, programName: "Test", ... }
-
-2. Probar JWT directamente:
-   POST /api/wallets/google { cardCode: "TEST", businessId: 9, variant: "strips", ... }
-
-3. Si JWT funciona pero REST API no → problema con la clase/objeto
-4. Si JWT también falla → problema con Service Account o configuración base
+CAMBIOS REALIZADOS (4 líneas):
+1. Línea ~15: Agregado import de pwaWalletService
+2. Línea ~335: Construcción de URLs PWA con buildPwaUrls()
+3. Líneas ~350-352: Agregadas 3 propiedades en response.wallet
+4. Línea ~373: Actualizado log final con hasPwaUrl
 
 */

@@ -1,0 +1,27 @@
+{
+  "name": "Windoe Loyalty cards",
+  "short_name": "Lealtad",
+  "description": "Tu tarjeta digital de lealtad",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2d3436",
+  "theme_color": "#2d3436",
+  "orientation": "portrait",
+  "scope": "/wallet/",
+  "icons": [
+    {
+      "src": "/WindoeLogo128.png",
+      "sizes": "192x80",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/WindoeLogo512.png",
+      "sizes": "511x212",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["shopping", "lifestyle"],
+  "lang": "es-MX"
+}

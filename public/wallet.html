@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2d3436">
+  <title>Mi Tarjeta de Lealtad</title>
+  
+  <link rel="manifest" id="manifest-link" href="/public/manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Lealtad">
+  <link rel="apple-touch-icon" id="apple-icon" href="/public/WindoeLogo128.png">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/public/wallet.css">
+
+  <!-- Librerías externas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf417-js/pdf417.js"></script>
+</head>
+<body>
+  <!-- Contenedor principal -->
+  <div id="app">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p data-i18n="loading">Cargando tarjeta...</p>
+    </div>
+  </div>
+
+  <!-- Modal de instrucciones -->
+  <div id="install-modal" class="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeInstallModal()">×</button>
+      <div class="modal-title" data-i18n="installInstructions.title">📱 Instalar en tu iPhone</div>
+      
+      <div class="instruction-step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title" data-i18n="installInstructions.step1.title">Toca el botón de compartir</div>
+          <div class="step-desc" data-i18n="installInstructions.step1.desc">En la barra inferior de Safari</div>
+          <div class="step-icon">⬆️</div>
+        </div>
+      </div>
+
+      <div class="instruction-step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title" data-i18n="installInstructions.step2.title">Selecciona "Añadir a inicio"</div>
+          <div class="step-desc" data-i18n="installInstructions.step2.desc">Desplázate hacia abajo en el menú</div>
+          <div class="step-icon">➕ 🏠</div>
+        </div>
+      </div>
+
+      <div class="instruction-step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title" data-i18n="installInstructions.step3.title">Confirma</div>
+          <div class="step-desc" data-i18n="installInstructions.step3.desc">Toca "Añadir" en la esquina superior derecha</div>
+          <div class="step-icon">✅</div>
+        </div>
+      </div>
+
+      <div class="modal-note" data-i18n="installInstructions.note">
+        💡 La app aparecerá en tu pantalla de inicio como cualquier otra aplicación
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/public/wallet.js"></script>
+  
+  <!-- Aplicar traducciones al modal si es necesario -->
+  <script>
+    // Traducir modal al cargar
+    document.addEventListener('DOMContentLoaded', () => {
+      const lang = navigator.language.startsWith('es') ? 'es' : 'en';
+      
+      // Si no es español, traducir elementos del modal
+      if (lang === 'en' && typeof t === 'function') {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+          const key = el.getAttribute('data-i18n');
+          el.textContent = t(key);
+        });
+      }
+    });
+  </script>
+</body>
+</html>

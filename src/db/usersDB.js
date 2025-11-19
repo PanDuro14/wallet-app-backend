@@ -478,6 +478,46 @@ const searchUsersByData = async (searchTerm, searchType) => {
 };
 
 
+/**
+ * Obtiene usuarios inactivos según días de inactividad
+ * @param {number} inactiveDays - Días de inactividad
+ * @param {number} businessId - (Opcional) Filtrar por negocio
+ */
+const getInactiveUsers = async (inactiveDays = 7, businessId = null) => {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - inactiveDays);
+
+    let query = `
+      SELECT 
+        u.*,
+        c.card_type,
+        c.strips_required
+      FROM users u
+      LEFT JOIN cards c ON u.card_detail_id = c.id
+      WHERE u.updated_at < $1
+        AND u.serial_number IS NOT NULL
+    `;
+
+    const params = [cutoffDate];
+
+    if (businessId) {
+      query += ` AND u.business_id = $2`;
+      params.push(businessId);
+    }
+
+    query += ` ORDER BY u.updated_at ASC`;
+
+    const result = await pool.query(query, params);
+    return result.rows;
+
+  } catch (error) {
+    console.error('[getInactiveUsers] Error:', error);
+    throw error;
+  }
+};
+
+
 module.exports = {
   getAllUsers,
   getOneUser,
@@ -493,5 +533,6 @@ module.exports = {
   getUserDataBySerial, 
   validateStripsData,
   prepareStripsData, 
-  searchUsersByData
+  searchUsersByData, 
+  getInactiveUsers
 };

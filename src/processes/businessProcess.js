@@ -1,6 +1,7 @@
 // processes/businessProcess.js
 const businessService = require('../services/businessService');
 
+
 const safeMsg = (e) => (e?.message ?? (typeof e === 'string' ? e : 'unknown'));
 
 async function loginBusiness(email, password) {
@@ -41,9 +42,9 @@ async function createBusiness(name, email, password, logoBuffer, stripImageOn, s
   }
 }
 
-async function updateBusiness(id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at) {
+async function updateBusiness(id, updates) {
   try {
-    return await businessService.updateBusiness(id, name, email, password, logoBuffer, stripImageOn, stripImageOff, created_at, updated_at);
+    return await businessService.updateBusiness(id, updates);
   } catch (err) {
     throw new Error('updateBusiness failed', { cause: err });
   }
