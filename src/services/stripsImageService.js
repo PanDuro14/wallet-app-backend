@@ -103,7 +103,7 @@ class StripsImageService {
         .toBuffer();
 
     } catch (error) {
-      console.error('[StripsImage] ❌ Error:', error.message);
+      //console.error('[StripsImage] ❌ Error:', error.message);
       throw error;
     }
   }

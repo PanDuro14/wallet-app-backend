@@ -12,7 +12,7 @@ const {
   issueGoogleWallet           // Wrapper unificado
 } = require('../processes/walletProcess');
 
-// ✅ NUEVO: Import para PWA URLs
+//  NUEVO: Import para PWA URLs
 const pwaWalletService = require('../services/pwaWalletService');
 
 const pickFirst = (arr) => (Array.isArray(arr) && arr.length ? arr[0] : null);
@@ -61,14 +61,14 @@ const pickDesign = async (business_id, card_detail_id) => {
     const raw = await carddetailService.getOneCardDetails(id);
     const design = unwrapDesignRow(raw);
 
-    console.log('[pickDesign] check', {
-      input_business_id: bizId,
-      input_card_detail_id: id,
-      got_row: !!raw,
-      unwrapped: !!design,
-      keys: Object.keys(design || {}),
-      row_business_id: design?.business_id
-    });
+    ////console.log('[pickDesign] check', {
+    //  input_business_id: bizId,
+    //  input_card_detail_id: id,
+    //  got_row: !!raw,
+    //  unwrapped: !!design,
+    //  keys: Object.keys(design || {}),
+    //  row_business_id: design?.business_id
+    //});
 
     if (!design) {
       const err = new Error('card_detail_id no encontrado');
@@ -88,11 +88,11 @@ const pickDesign = async (business_id, card_detail_id) => {
   const list = await carddetailService.getAllCardsByBusiness(bizId);
   const first = Array.isArray(list) && list.length ? list[0] : null;
 
-  console.log('[pickDesign] fallback-first', {
-    bizId,
-    count: Array.isArray(list) ? list.length : 0,
-    first: first?.id
-  });
+  ////console.log('[pickDesign] fallback-first', {
+  //  bizId,
+  //  count: Array.isArray(list) ? list.length : 0,
+  //  first: first?.id
+  //});
 
   if (!first) {
     const err = new Error('El negocio no tiene diseños de tarjeta');
@@ -136,11 +136,11 @@ const createUserAndIssueProcess = async ({
     throw err;
   }
 
-  console.log('[createUserAndIssue] Tipo de tarjeta determinado:', {
-    input_variant: variant,
-    input_cardType: cardType,
-    final_cardType: finalCardType
-  });
+  //console.log('[createUserAndIssue] Tipo de tarjeta determinado:', {
+  //  input_variant: variant,
+  //  input_cardType: cardType,
+  //  final_cardType: finalCardType
+  //});
 
   if (finalCardType === 'strips' && !rewardTitle) {
     const err = new Error('rewardTitle es obligatorio para tarjetas de strips');
@@ -213,44 +213,44 @@ const createUserAndIssueProcess = async ({
     userData.reward_unlocked = false;
   }
 
-  console.log('[createUserAndIssue] userData preparado:', {
-    card_type: userData.card_type,
-    strips_required: userData.strips_required,
-    reward_title: userData.reward_title,
-    points: userData.points
-  });
+  //console.log('[createUserAndIssue] userData preparado:', {
+  //  card_type: userData.card_type,
+  //  strips_required: userData.strips_required,
+  //  reward_title: userData.reward_title,
+  //  points: userData.points
+  //});
 
   /* ====== 5. CREAR USUARIO EN BD ====== */
   const user = await usersService.createUser(userData);
   
-  console.log('[createUserAndIssue] Usuario creado:', { 
-    id: user.id, 
-    email: user.email, 
-    card_type: user.card_type,
-    strips_required: user.strips_required,
-    points: user.points
-  });
+  //console.log('[createUserAndIssue] Usuario creado:', { 
+  //  id: user.id, 
+  //  email: user.email, 
+  //  card_type: user.card_type,
+  //  strips_required: user.strips_required,
+  //  points: user.points
+  //});
 
   if (finalCardType === 'strips' && !user.card_type) {
-    console.error('[CRITICAL] Usuario creado sin card_type, revisar usersService.createUser');
+    //console.error('[CRITICAL] Usuario creado sin card_type, revisar usersService.createUser');
   }
 
   /* ====== 6. EMITIR WALLETS ====== */
   
   // 6.1) Google Wallet - CORREGIDO CON JWT (más confiable)
-  console.log('[createUserAndIssue] Creando Google Wallet:', {
-    cardCode: serial_number,
-    variant: finalCardType,
-    strips_collected: finalCardType === 'strips' ? 0 : undefined,
-    strips_required: finalCardType === 'strips' ? (userData.strips_required || 10) : undefined
-  });
+  //console.log('[createUserAndIssue] Creando Google Wallet:', {
+  //  cardCode: serial_number,
+  //  variant: finalCardType,
+  //  strips_collected: finalCardType === 'strips' ? 0 : undefined,
+  //  strips_required: finalCardType === 'strips' ? (userData.strips_required || 10) : undefined
+  //});
 
   let google_save_url = null;
   let googleObjectId = null;
   
   try {
     // MÉTODO 1: Intentar con REST API primero (permite actualizaciones)
-    console.log('[createUserAndIssue] Intentando REST API...');
+    //console.log('[createUserAndIssue] Intentando REST API...');
     
     const googleResult = await createGoogleWalletObject({
       cardCode: serial_number,
@@ -276,20 +276,20 @@ const createUserAndIssueProcess = async ({
     googleObjectId = googleResult.objectId;
     google_save_url = `https://pay.google.com/gp/v/save/${encodeURIComponent(googleObjectId)}`;
     
-    console.log('[createUserAndIssue] ✓ Google Wallet REST API exitoso:', {
-      objectId: googleObjectId,
-      url: google_save_url,
-      existed: googleResult.existed
-    });
+    //console.log('[createUserAndIssue] ✓ Google Wallet REST API exitoso:', {
+    //  objectId: googleObjectId,
+    //  url: google_save_url,
+    //  existed: googleResult.existed
+    //});
     
   } catch (restApiError) {
-    console.error('[createUserAndIssue] ❌ REST API falló:', {
-      message: restApiError.message,
-      stack: restApiError.stack?.split('\n').slice(0, 3).join('\n')
-    });
+    //console.error('[createUserAndIssue] ❌ REST API falló:', {
+    //  message: restApiError.message,
+    //  stack: restApiError.stack?.split('\n').slice(0, 3).join('\n')
+    //});
     
     // MÉTODO 2: Fallback a JWT (más confiable pero no permite actualizaciones)
-    console.log('[createUserAndIssue] 🔄 Intentando fallback con JWT...');
+    //console.log('[createUserAndIssue] 🔄 Intentando fallback con JWT...');
     
     try {
       google_save_url = await issueGoogleWalletLink({
@@ -312,15 +312,15 @@ const createUserAndIssueProcess = async ({
         barcode: barcode || { type: 'qr' }
       });
       
-      console.log('[createUserAndIssue] ✓ JWT fallback exitoso:', {
-        url: google_save_url,
-        method: 'jwt'
-      });
+      //console.log('[createUserAndIssue] ✓ JWT fallback exitoso:', {
+      //  url: google_save_url,
+      //  method: 'jwt'
+      //});
       
     } catch (jwtError) {
-      console.error('[createUserAndIssue] ❌ JWT fallback también falló:', {
-        message: jwtError.message
-      });
+      //console.error('[createUserAndIssue] ❌ JWT fallback también falló:', {
+      //  message: jwtError.message
+      //});
       google_save_url = null;
     }
   }
@@ -330,10 +330,10 @@ const createUserAndIssueProcess = async ({
   const typeId = process.env.PASS_TYPE_IDENTIFIER;
   const apple_pkpass_url = `${base}/api/v1/wallets/v1/passes/${encodeURIComponent(typeId)}/${serial_number}`;
 
-  console.log('[createUserAndIssue] URLs generadas:', {
-    google: google_save_url ? '✓' : '✗',
-    apple: apple_pkpass_url ? '✓' : '✗'
-  });
+  //console.log('[createUserAndIssue] URLs generadas:', {
+  //  google: google_save_url ? '✓' : '✗',
+  //  apple: apple_pkpass_url ? '✓' : '✗'
+  //});
 
   /* ====== 7. GUARDAR URL DE GOOGLE WALLET ====== */
   if (google_save_url) {
@@ -344,17 +344,17 @@ const createUserAndIssueProcess = async ({
         wallet_url: google_save_url,
         google_object_id: googleObjectId
       });
-      console.log('[createUserAndIssue] ✓ Google Wallet URL guardada');
+      //console.log('[createUserAndIssue] ✓ Google Wallet URL guardada');
     } catch (saveError) {
-      console.error('[createUserAndIssue] ⚠️ Error guardando wallet URL:', saveError.message);
+      //console.error('[createUserAndIssue] ⚠️ Error guardando wallet URL:', saveError.message);
     }
   } else {
-    console.warn('[createUserAndIssue] ⚠️ No se pudo crear Google Wallet, solo disponible Apple Wallet');
+    //console.warn('[createUserAndIssue] ⚠️ No se pudo crear Google Wallet, solo disponible Apple Wallet');
   }
 
   /* ====== 8. CONSTRUIR RESPUESTA CON PWA ====== */
   
-  // ✅ NUEVO: Construir URLs de PWA
+  //  NUEVO: Construir URLs de PWA
   const pwaUrls = pwaWalletService.buildPwaUrls(serial_number);
   
   const response = {
@@ -382,7 +382,7 @@ const createUserAndIssueProcess = async ({
       apple_auth_header: `ApplePass ${apple_auth_token}`,
       google_method: google_save_url ? (googleObjectId ? 'rest_api' : 'jwt') : null,
       
-      // ✅ NUEVO: PWA (funciona en todos los dispositivos)
+      //  NUEVO: PWA (funciona en todos los dispositivos)
       pwa_wallet_url: pwaUrls.pwa,
       pwa_install_url: pwaUrls.install,
       pwa_share_url: pwaUrls.share
@@ -406,14 +406,14 @@ const createUserAndIssueProcess = async ({
     if (since) response.user.since = since;
   }
 
-  console.log('[createUserAndIssue] ✅ Proceso completado:', {
-    userId: user.id,
-    cardType: finalCardType,
-    hasGoogleUrl: !!google_save_url,
-    hasAppleUrl: !!apple_pkpass_url,
-    hasPwaUrl: !!pwaUrls.pwa, // ✅ Nuevo
-    googleObjectId: googleObjectId || 'N/A'
-  });
+  //console.log('[createUserAndIssue]  Proceso completado:', {
+  //  userId: user.id,
+  //  cardType: finalCardType,
+  //  hasGoogleUrl: !!google_save_url,
+  //  hasAppleUrl: !!apple_pkpass_url,
+  //  hasPwaUrl: !!pwaUrls.pwa, //  Nuevo
+  //  googleObjectId: googleObjectId || 'N/A'
+  //});
 
   return response;
 };
@@ -439,11 +439,11 @@ const changeUserDesignProcess = async ({ user_id, card_detail_id }) => {
     updated_at: new Date()
   });
 
-  console.log('[changeUserDesign] Diseño actualizado:', {
-    userId: user.id,
-    oldDesignId: user.card_detail_id,
-    newDesignId: design.id
-  });
+  ////console.log('[changeUserDesign] Diseño actualizado:', {
+  //  userId: user.id,
+  //  oldDesignId: user.card_detail_id,
+  //  newDesignId: design.id
+  //});
 
   return true;
 };

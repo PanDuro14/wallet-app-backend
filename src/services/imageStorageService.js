@@ -14,7 +14,7 @@ function isPNG(buf) {
 async function saveBufferAsPublicPNG({ businessId, kind, buffer }) {
   if (!buffer || !Buffer.isBuffer(buffer)) return null;
   if (!isPNG(buffer)) {
-    console.warn(`[imageStorage] ${kind} no es PNG. Convierte antes de guardar en DB (Apple lo exige).`);
+    //console.warn(`[imageStorage] ${kind} no es PNG. Convierte antes de guardar en DB (Apple lo exige).`);
   }
 
   const dir = path.join(process.cwd(), 'public', 'uploads', String(businessId || 'unknown'));

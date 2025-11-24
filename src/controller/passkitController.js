@@ -40,14 +40,14 @@ const listRegistrations = async (req, res) => {
       return res.sendStatus(404);
     }
 
-    console.log('[listRegistrations] req', { deviceId, since });
+    //console.log('[listRegistrations] req', { deviceId, since });
     const { serialNumbers, lastUpdated } =
       await listUpdatedSerialsSince({ deviceId, passTypeId, since });
-    console.log('[listRegistrations] res', { serialNumbers, lastUpdated });
+    //console.log('[listRegistrations] res', { serialNumbers, lastUpdated });
 
     return res.json({ serialNumbers, lastUpdated });
   } catch (e) {
-    console.error('listRegistrations error:', e);
+    //console.error('listRegistrations error:', e);
     
     return res.status(200).json({
       serialNumbers: [],
@@ -70,7 +70,7 @@ const deregisterDevice = async (req, res) => {
     await deleteRegistration({ deviceId, passTypeId, serial });
     return res.sendStatus(200);
   } catch (e) {
-    console.error('deregisterDevice error:', e);
+    //console.error('deregisterDevice error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 };
@@ -78,7 +78,7 @@ const deregisterDevice = async (req, res) => {
 // POST /v1/log
 const acceptLogs = async (req, res) => {
   try {
-    console.log('[PassKit logs]', JSON.stringify(req.body));
+    //console.log('[PassKit logs]', JSON.stringify(req.body));
     return res.sendStatus(200);
   } catch {
     return res.sendStatus(200);
@@ -97,14 +97,14 @@ const registerDevice = async (req, res) => {
     if (!pushToken)        return res.status(400).json({ error: 'pushToken required' });
     if (!isUuid(serial))   return res.status(400).send('invalid serial');
 
-    console.log('[registerDevice][in]', {
-      url: req.originalUrl,
-      deviceId, passTypeId, serial,
-      ct: req.get('Content-Type'),
-      hasBody: !!req.body,
-      pushLen: (pushToken || '').length,
-      ua: req.get('User-Agent')
-    });
+    //console.log('[registerDevice][in]', {
+    //  url: req.originalUrl,
+    //  deviceId, passTypeId, serial,
+    //  ct: req.get('Content-Type'),
+    //  hasBody: !!req.body,
+    //  pushLen: (pushToken || '').length,
+    //  ua: req.get('User-Agent')
+    //});
 
     const row = await findUserPassBySerial(serial);
     if (!row) return res.sendStatus(404);
@@ -129,12 +129,12 @@ const registerDevice = async (req, res) => {
     return res.sendStatus(existed ? 200 : 201);
 
   } catch (err) {
-    console.error('[registerDevice][err]', {
-      msg: err?.message ?? String(err),
-      code: err?.code,
-      detail: err?.detail,
-      stack: err?.stack
-    });
+    //console.error('[registerDevice][err]', {
+    //  msg: err?.message ?? String(err),
+    //  code: err?.code,
+    //  detail: err?.detail,
+    //  stack: err?.stack
+    //});
     if (err?.code === '23505' || /unique/i.test(err?.message || '')) {
       return res.sendStatus(200);
     }
@@ -163,16 +163,16 @@ const bumpPoints = async (req, res) => {
       await notificationService.sendAppleWalletNotification(
         serial, row.id, upd.points, row.lang || 'en'
       ); 
-      console.log(`[passkitController: bumpPoints] Notificacion enviada para el serial ${serial}: ${upd.points} puntos`); 
+      //console.log(`[passkitController: bumpPoints] Notificacion enviada para el serial ${serial}: ${upd.points} puntos`); 
     } catch (notifError){
-      console.error(' [passkitController: bumpPoints] Error enviado notificacion: ', notifError.message); 
+      //console.error(' [passkitController: bumpPoints] Error enviado notificacion: ', notifError.message); 
     }
 
 
     let notified = 0;
     if (process.env.APNS_ENABLED === 'true') {
       const tokens = await listPushTokensBySerial(serial);
-      console.log('[bumpPoints] pushTokens', tokens.length);
+      //console.log('[bumpPoints] pushTokens', tokens.length);
 
       const results = await Promise.allSettled(
         tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
@@ -183,9 +183,9 @@ const bumpPoints = async (req, res) => {
         const token = tokens[i].push_token;
         if (r.status === 'fulfilled') {
           const { status, reason, host } = r.value;
-          console.log('[APNs]', {
-            token: token?.slice?.(0,8), env: tokens[i].env, host, status, reason
-          });
+          //console.log('[APNs]', {
+          //  token: token?.slice?.(0,8), env: tokens[i].env, host, status, reason
+          //});
           if (status === 200) notified++;
           if (status === 410) {
             try {
@@ -197,14 +197,14 @@ const bumpPoints = async (req, res) => {
             } catch {}
           }
         } else {
-          console.log('[bumpPoints] apns error', r.reason);
+          //console.log('[bumpPoints] apns error', r.reason);
         }
       }
     }
 
     return res.json({ ok: true, points: upd.points, notified });
   } catch (err) {
-    console.error('bumpPoints error:', err);
+    //console.error('bumpPoints error:', err);
     return res.status(500).json({ error: 'Server error' });
   }
 };
@@ -266,7 +266,7 @@ const grantStrip = async (req, res) => {
           'strips', 
           row.lang || 'es'
         ); 
-        console.log(`grantStrip] Notificación de COMPLETACIÓN enviada para serial ${serial}`); 
+        //console.log(`grantStrip] Notificación de COMPLETACIÓN enviada para serial ${serial}`); 
       } else {
         // ✅ FIX: Pasar NÚMEROS, no strings
         await notificationService.sendStripsUpdateNotification(
@@ -276,10 +276,10 @@ const grantStrip = async (req, res) => {
           data.strips_required,   
           row.lang || 'es'
         ); 
-        console.log(`[grantStrip] Notificación de PROGRESO enviada para serial ${serial} (${data.strips_collected}/${data.strips_required})`); 
+        ////console.log(`[grantStrip] Notificación de PROGRESO enviada para serial ${serial} (${data.strips_collected}/${data.strips_required})`); 
       }
     } catch (notifError) {
-      console.error(`[grantStrip] Error enviando notificación:`, notifError.message); 
+      ////console.error(`[grantStrip] Error enviando notificación:`, notifError.message); 
     }
 
     // Notificar con APNs (silent push)
@@ -324,7 +324,7 @@ const grantStrip = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('grantStrip error:', err);
+    ////console.error('grantStrip error:', err);
     return res.status(500).json({ error: 'Error del servidor' });
   }
 };
@@ -393,7 +393,7 @@ const resetStrips = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('resetStrips error:', err);
+    //console.error('resetStrips error:', err);
     return res.status(500).json({ error: 'Error del servidor' });
   }
 };
@@ -404,7 +404,7 @@ const resetStrips = async (req, res) => {
 // ========== GET PASS - CON DEBUGGING INTENSIVO ==========
 const getPass = async (req, res) => {
   try {
-    console.log('[getPass] === INICIO ===');
+    //console.log('[getPass] === INICIO ===');
     const passTypeId = req.params.passTypeId;
     const serial = cleanUuid(req.params.serial);
 
@@ -412,19 +412,19 @@ const getPass = async (req, res) => {
     if (!row) return res.sendStatus(404);
 
     // DEBUG: VER QUÉ DATOS TIENES EN LA DB
-    console.log('[getPass] DATOS DE LA DB:', {
-      id: row.id,
-      serial_number: row.serial_number,
-      business_id: row.business_id,
-      card_detail_id: row.card_detail_id,
-      card_type: row.card_type,
-      points: row.points,
-      strips_collected: row.strips_collected,
-      strips_required: row.strips_required,
-      reward_title: row.reward_title,
-      name: row.name,
-      business_name: row.business_name
-    });
+    //console.log('[getPass] DATOS DE LA DB:', {
+    //  id: row.id,
+    //  serial_number: row.serial_number,
+    //  business_id: row.business_id,
+    //  card_detail_id: row.card_detail_id,
+    //  card_type: row.card_type,
+    //  points: row.points,
+    //  strips_collected: row.strips_collected,
+    //  strips_required: row.strips_required,
+    //  reward_title: row.reward_title,
+    //  name: row.name,
+    //  business_name: row.business_name
+    //});
 
     const inHeader = req.headers.authorization || '';
     const inToken  = inHeader.replace(/^ApplePass\s+/i, '');
@@ -444,17 +444,17 @@ const getPass = async (req, res) => {
       return res.status(304).end();
     }
 
-    console.log('[getPass] Resolviendo diseño...');
+    //console.log('[getPass] Resolviendo diseño...');
 
     // Resolver diseño unificado
     let resolved = null;
     try {
       const designRow = await cardSvc.getOneCardDetails(row.card_detail_id);
-      console.log('[getPass] DESIGN ROW:', {
-        hasDesignRow: !!designRow,
-        hasDesignJson: !!(designRow && designRow.design_json),
-        designJson: designRow?.design_json ? JSON.stringify(designRow.design_json).substring(0, 200) + '...' : null
-      });
+      //console.log('[getPass] DESIGN ROW:', {
+      //  hasDesignRow: !!designRow,
+      //  hasDesignJson: !!(designRow && designRow.design_json),
+      //  designJson: designRow?.design_json ? JSON.stringify(designRow.design_json).substring(0, 200) + '...' : null
+      //});
 
       if (designRow && designRow.design_json) {
         resolved = resolveDesignForUser(designRow.design_json, {
@@ -470,31 +470,31 @@ const getPass = async (req, res) => {
         });
       }
     } catch (e) {
-      console.log('[getPass] design_json load/resolve warn:', e?.message);
+      //console.log('[getPass] design_json load/resolve warn:', e?.message);
     }
 
-    console.log('[getPass] RESOLVED DESIGN:', {
-      hasResolved: !!resolved,
-      design: resolved?.design ? Object.keys(resolved.design) : null,
-      ctx: resolved?.ctx
-    });
+    //console.log('[getPass] RESOLVED DESIGN:', {
+    //  hasResolved: !!resolved,
+    //  design: resolved?.design ? Object.keys(resolved.design) : null,
+    //  ctx: resolved?.ctx
+    //});
 
     // CARGAR ASSETS DEL BUSINESS (INCLUYENDO STRIPS)
     const brandAssets = await loadBrandAssets(row.business_id);
-    console.log('[getPass] BRAND ASSETS:', {
-      hasLogo: !!brandAssets.logoBuffer,
-      logoSize: brandAssets.logoBuffer?.length || 0,
-      hasStripBuffer: !!brandAssets.stripBuffer,
-      stripBufferSize: brandAssets.stripBuffer?.length || 0,
-      hasStripOn: !!brandAssets.stripOnBuffer,
-      stripOnSize: brandAssets.stripOnBuffer?.length || 0,
-      hasStripOff: !!brandAssets.stripOffBuffer,
-      stripOffSize: brandAssets.stripOffBuffer?.length || 0,
-      hasStripImageOn: !!brandAssets.stripImageOn,
-      hasStripImageOff: !!brandAssets.stripImageOff,
-      bg: brandAssets.bg,
-      fg: brandAssets.fg
-    });
+    //console.log('[getPass] BRAND ASSETS:', {
+    //  hasLogo: !!brandAssets.logoBuffer,
+    //  logoSize: brandAssets.logoBuffer?.length || 0,
+    //  hasStripBuffer: !!brandAssets.stripBuffer,
+    //  stripBufferSize: brandAssets.stripBuffer?.length || 0,
+    //  hasStripOn: !!brandAssets.stripOnBuffer,
+    //  stripOnSize: brandAssets.stripOnBuffer?.length || 0,
+    //  hasStripOff: !!brandAssets.stripOffBuffer,
+    //  stripOffSize: brandAssets.stripOffBuffer?.length || 0,
+    //  hasStripImageOn: !!brandAssets.stripImageOn,
+    //  hasStripImageOff: !!brandAssets.stripImageOff,
+    //  bg: brandAssets.bg,
+    //  fg: brandAssets.fg
+    //});
 
     const dj  = resolved?.design || {};
     const ctx = resolved?.ctx || {
@@ -508,32 +508,32 @@ const getPass = async (req, res) => {
       isComplete: (row.strips_required && row.strips_collected >= row.strips_required) || false
     };
 
-    console.log('[getPass] CONTEXTO FINAL:', ctx);
+    //console.log('[getPass] CONTEXTO FINAL:', ctx);
 
     // DEBUG ESPECÍFICO PARA STRIPS
-    console.log('[getPass] CÁLCULO STRIPS DEBUG:', {
-      'row.strips_collected': row.strips_collected,
-      'row.strips_required': row.strips_required,
-      'ctx.strips_collected': ctx.strips_collected,
-      'ctx.strips_required': ctx.strips_required,
-      'ctx.isComplete': ctx.isComplete,
-      'cálculo manual': `${row.strips_collected || 0} >= ${row.strips_required} = ${(row.strips_collected || 0) >= row.strips_required}`
-    });
+    //console.log('[getPass] CÁLCULO STRIPS DEBUG:', {
+    //  'row.strips_collected': row.strips_collected,
+    //  'row.strips_required': row.strips_required,
+    //  'ctx.strips_collected': ctx.strips_collected,
+    //  'ctx.strips_required': ctx.strips_required,
+    //  'ctx.isComplete': ctx.isComplete,
+    //  'cálculo manual': `${row.strips_collected || 0} >= ${row.strips_required} = ${(row.strips_collected || 0) >= row.strips_required}`
+    //});
 
     // Determinar tipo de tarjeta usando el design_json del card_detail
     let cardType = 'points'; // Default
     
     if (dj.cardType) {
       cardType = dj.cardType;
-      console.log('[getPass] Card type desde design_json:', cardType);
+      //console.log('[getPass] Card type desde design_json:', cardType);
     } else if (row.strips_required && row.strips_required > 0) {
       cardType = 'strips';
-      console.log('[getPass] Card type inferido por strips_required:', cardType);
+      //console.log('[getPass] Card type inferido por strips_required:', cardType);
     } else {
-      console.log('[getPass] Card type default:', cardType);
+      //console.log('[getPass] Card type default:', cardType);
     }
     
-    console.log('[getPass] CARD TYPE FINAL:', cardType);
+    //console.log('[getPass] CARD TYPE FINAL:', cardType);
 
     const programNameForPass = dj.hideProgramName ? undefined : (dj.programName || ctx.programName);
     const orgNameForPass = dj.hideProgramName ? '\u00A0' : (process.env.ORG_NAME || 'Your Org');
@@ -552,55 +552,55 @@ const getPass = async (req, res) => {
     let userStripsImage = null;
     if (cardType === 'strips') {
       try {
-        console.log('[getPass] INICIANDO GENERACIÓN DE STRIPS...');
+        //console.log('[getPass] INICIANDO GENERACIÓN DE STRIPS...');
         
         // Usar las imágenes del business
         const stripImageOn = brandAssets.stripImageOn || brandAssets.stripOnBuffer;
         const stripImageOff = brandAssets.stripImageOff || brandAssets.stripOffBuffer;
         
-        console.log('[getPass] IMÁGENES DISPONIBLES:', {
-          stripImageOn: !!stripImageOn,
-          stripImageOnSize: stripImageOn?.length || 0,
-          stripImageOff: !!stripImageOff, 
-          stripImageOffSize: stripImageOff?.length || 0,
-          stripImageOnType: stripImageOn ? typeof stripImageOn : 'undefined',
-          stripImageOffType: stripImageOff ? typeof stripImageOff : 'undefined'
-        });
+        //console.log('[getPass] IMÁGENES DISPONIBLES:', {
+        //  stripImageOn: !!stripImageOn,
+        //  stripImageOnSize: stripImageOn?.length || 0,
+        //  stripImageOff: !!stripImageOff, 
+        //  stripImageOffSize: stripImageOff?.length || 0,
+        //  stripImageOnType: stripImageOn ? typeof stripImageOn : 'undefined',
+        //  stripImageOffType: stripImageOff ? typeof stripImageOff : 'undefined'
+        //});
         
         if (!stripImageOn || !stripImageOff) {
-          console.warn('[getPass] FALTAN IMÁGENES DE STRIPS EN EL BUSINESS');
-          console.warn('[getPass] stripImageOn presente:', !!stripImageOn);
-          console.warn('[getPass] stripImageOff presente:', !!stripImageOff);
+          //console.warn('[getPass] FALTAN IMÁGENES DE STRIPS EN EL BUSINESS');
+          //console.warn('[getPass] stripImageOn presente:', !!stripImageOn);
+          //console.warn('[getPass] stripImageOff presente:', !!stripImageOff);
           throw new Error('Strip images not found in business');
         }
 
         const totalStrips = (dj.strips?.total) || ctx.strips_required;
         const collectedStrips = ctx.strips_collected || 0;
 
-        console.log('[getPass] PARÁMETROS PARA GENERAR STRIPS:', {
-          total: totalStrips,
-          collected: collectedStrips,
-          stripImageOnSize: stripImageOn.length,
-          stripImageOffSize: stripImageOff.length,
-          layout: dj.strips?.layout || 'horizontal',
-          cardWidth: 624,
-          stripHeight: 80,
-          // DEBUGGING ADICIONAL
-          'ctx.strips_required': ctx.strips_required,
-          'dj.strips?.total': dj.strips?.total,
-          'totalStrips calculado': totalStrips,
-          'collectedStrips': collectedStrips
-        });
+        //console.log('[getPass] PARÁMETROS PARA GENERAR STRIPS:', {
+        //  total: totalStrips,
+        //  collected: collectedStrips,
+        //  stripImageOnSize: stripImageOn.length,
+        //  stripImageOffSize: stripImageOff.length,
+        //  layout: dj.strips?.layout || 'horizontal',
+        //  cardWidth: 624,
+        //  stripHeight: 80,
+        //  // DEBUGGING ADICIONAL
+        //  'ctx.strips_required': ctx.strips_required,
+        //  'dj.strips?.total': dj.strips?.total,
+        //  'totalStrips calculado': totalStrips,
+        //  'collectedStrips': collectedStrips
+        //});
 
         // Verificar que tenemos valores válidos antes de generar
         if (!totalStrips || totalStrips <= 0) {
-          console.error('[getPass] TOTAL STRIPS INVÁLIDO:', totalStrips);
+          //console.error('[getPass] TOTAL STRIPS INVÁLIDO:', totalStrips);
           throw new Error(`Invalid totalStrips: ${totalStrips}`);
         }
 
         // VERIFICAR QUE EL SERVICIO EXISTE
-        console.log('[getPass] Verificando generateStripsImage...');
-        console.log('[getPass] generateStripsImage type:', typeof generateStripsImage);
+        //console.log('[getPass] Verificando generateStripsImage...');
+        //console.log('[getPass] generateStripsImage type:', typeof generateStripsImage);
 
         // Generar la imagen compuesta de strips
         userStripsImage = await generateStripsImage({
@@ -613,37 +613,37 @@ const getPass = async (req, res) => {
           stripHeight: 80
         });
 
-        console.log('[getPass] RESULTADO GENERACIÓN:', {
-          generated: !!userStripsImage,
-          type: typeof userStripsImage,
-          isBuffer: Buffer.isBuffer(userStripsImage),
-          size: userStripsImage?.length || 0
-        });
+        //console.log('[getPass] RESULTADO GENERACIÓN:', {
+        //  generated: !!userStripsImage,
+        //  type: typeof userStripsImage,
+        //  isBuffer: Buffer.isBuffer(userStripsImage),
+        //  size: userStripsImage?.length || 0
+        //});
 
         if (userStripsImage && userStripsImage.length > 0) {
-          console.log('[getPass] Imagen de strips generada exitosamente:', userStripsImage.length, 'bytes');
+          //console.log('[getPass] Imagen de strips generada exitosamente:', userStripsImage.length, 'bytes');
         } else {
-          console.warn('[getPass] La imagen de strips está vacía o no se generó');
+          //console.warn('[getPass] La imagen de strips está vacía o no se generó');
           throw new Error('Generated strips image is empty');
         }
 
       } catch (stripsError) {
-        console.error('[getPass] ERROR GENERANDO STRIPS:');
-        console.error('Error message:', stripsError.message);
-        console.error('Error stack:', stripsError.stack);
+        //console.error('[getPass] ERROR GENERANDO STRIPS:');
+        //console.error('Error message:', stripsError.message);
+        //console.error('Error stack:', stripsError.stack);
         
         // Fallback: usar una de las imágenes base como strip
-        console.log('[getPass] USANDO FALLBACK PARA STRIPS...');
+        //console.log('[getPass] USANDO FALLBACK PARA STRIPS...');
         userStripsImage = brandAssets.stripOnBuffer || brandAssets.stripBuffer || null;
         
         if (userStripsImage) {
-          console.log('[getPass] Usando fallback strip image:', userStripsImage.length, 'bytes');
+          //console.log('[getPass] Usando fallback strip image:', userStripsImage.length, 'bytes');
         } else {
-          console.log('[getPass] NO HAY FALLBACK DISPONIBLE');
+          //console.log('[getPass] NO HAY FALLBACK DISPONIBLE');
         }
       }
     } else {
-      console.log('[getPass] Saltando generación de strips (no es strip card)');
+      //console.log('[getPass] Saltando generación de strips (no es strip card)');
     }
 
     // Configuración de assets
@@ -653,21 +653,21 @@ const getPass = async (req, res) => {
       strip: userStripsImage || (brandAssets.stripBuffer || null)
     };
 
-    console.log('[getPass] ASSETS FINALES:', {
-      hasLogo: !!assets.logo,
-      logoSize: assets.logo?.length || 0,
-      hasStrip: !!assets.strip,
-      stripSize: assets.strip?.length || 0,
-      stripIsGenerated: assets.strip === userStripsImage,
-      stripIsFallback: assets.strip !== userStripsImage && !!assets.strip
-    });
+    //console.log('[getPass] ASSETS FINALES:', {
+    //  hasLogo: !!assets.logo,
+    //  logoSize: assets.logo?.length || 0,
+    //  hasStrip: !!assets.strip,
+    //  stripSize: assets.strip?.length || 0,
+    //  stripIsGenerated: assets.strip === userStripsImage,
+    //  stripIsFallback: assets.strip !== userStripsImage && !!assets.strip
+    //});
 
     // FIELDS PARA STRIPS
     let fields = dj.fields || {};
 
     // Si es strip card, usar campos específicos para strips
     if (cardType === 'strips') {
-      console.log('[getPass] Configurando fields para strip card');
+      //console.log('[getPass] Configurando fields para strip card');
       
       fields = {
         primary: fields.primary || [
@@ -688,15 +688,15 @@ const getPass = async (req, res) => {
       };
 
       // DEBUG ESPECÍFICO PARA FIELDS
-      console.log('[getPass] Campos strips calculados:', {
-        'primaryValue': fields.primary[0]?.value,
-        'backStatus': fields.back?.find(f => f.key === 'status')?.value,
-        'isComplete usado': ctx.isComplete,
-        'strips_collected usado': ctx.strips_collected,
-        'strips_required usado': ctx.strips_required
-      });
+      //console.log('[getPass] Campos strips calculados:', {
+      //  'primaryValue': fields.primary[0]?.value,
+      //  'backStatus': fields.back?.find(f => f.key === 'status')?.value,
+      //  'isComplete usado': ctx.isComplete,
+      //  'strips_collected usado': ctx.strips_collected,
+      //  'strips_required usado': ctx.strips_required
+      //});
     } else {
-      console.log('[getPass] Configurando fields para points card');
+      //console.log('[getPass] Configurando fields para points card');
       
       // Campos por defecto para points card
       fields = {
@@ -706,17 +706,17 @@ const getPass = async (req, res) => {
       };
     }
 
-    console.log('[getPass] FIELDS CONFIGURADOS:', {
-      primaryCount: fields.primary?.length || 0,
-      secondaryCount: fields.secondary?.length || 0,
-      backCount: fields.back?.length || 0,
-      primaryValues: fields.primary?.map(f => `${f.key}=${f.value}`) || [],
-      secondaryValues: fields.secondary?.map(f => `${f.key}=${f.value}`) || [],
-    });
+    //console.log('[getPass] FIELDS CONFIGURADOS:', {
+    //  primaryCount: fields.primary?.length || 0,
+    //  secondaryCount: fields.secondary?.length || 0,
+    //  backCount: fields.back?.length || 0,
+    //  primaryValues: fields.primary?.map(f => `${f.key}=${f.value}`) || [],
+    //  secondaryValues: fields.secondary?.map(f => `${f.key}=${f.value}`) || [],
+    //});
 
     // Ocultar "cuenta" / memberId si lo pides
     if (dj.hideAccount) {
-      console.log('[getPass] OCULTANDO CAMPOS DE CUENTA');
+      //console.log('[getPass] OCULTANDO CAMPOS DE CUENTA');
       
       const safe = (arr) => Array.isArray(arr) ? arr : [];
       const BAN_KEYS = ['account', 'memberid', 'cuenta', 'code']; 
@@ -756,14 +756,14 @@ const getPass = async (req, res) => {
     const bc = dj.barcode || {};
     const formats = [bc.primary, ...(bc.additional || [])].filter(Boolean);
 
-    console.log('[getPass] PREPARANDO PKPASS CON:');
-    console.log('- cardType:', cardType);
-    console.log('- strips_collected:', ctx.strips_collected);
-    console.log('- strips_required:', ctx.strips_required); 
-    console.log('- isComplete:', ctx.isComplete);
-    console.log('- hasStripsImage:', !!userStripsImage);
-    console.log('- stripsImageSize:', userStripsImage ? userStripsImage.length : 0);
-    console.log('- fields primary:', fields.primary);
+    //console.log('[getPass] PREPARANDO PKPASS CON:');
+    //console.log('- cardType:', cardType);
+    //console.log('- strips_collected:', ctx.strips_collected);
+    //console.log('- strips_required:', ctx.strips_required); 
+    //console.log('- isComplete:', ctx.isComplete);
+    //console.log('- hasStripsImage:', !!userStripsImage);
+    //console.log('- stripsImageSize:', userStripsImage ? userStripsImage.length : 0);
+    //console.log('- fields primary:', fields.primary);
 
     const buffer = await createPkPassBuffer({
       cardCode: ctx.cardCode,
@@ -795,13 +795,13 @@ const getPass = async (req, res) => {
       'Cache-Control': 'no-store'
     });
     
-    console.log('[getPass] PKPass enviado exitosamente');
+    //console.log('[getPass] PKPass enviado exitosamente');
     return res.status(200).send(buffer);
 
   } catch (err) {
-    console.error('[getPass] === ERROR CRÍTICO ===');
-    console.error('Error message:', err.message);
-    console.error('Error stack:', err.stack);
+    //console.error('[getPass] === ERROR CRÍTICO ===');
+    //console.error('Error message:', err.message);
+    //console.error('Error stack:', err.stack);
     return res.status(500).json({
       error: 'PKPass build/sign error',
       message: err.message

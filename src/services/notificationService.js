@@ -1,41 +1,30 @@
-// services/notificationService.js - CORREGIDO
+// services/notificationService.js
+const db = require('../db/index');
 const { notifyWallet } = require('./apnsService');
 const { listPushTokensBySerial } = require('../db/appleWalletdb');
-const webpush = require('web-push');
+const admin = require('firebase-admin');
 
-//  USAR TU CONEXIÓN DE BD
-const dbConnection = require('../db/dbConection'); 
-const dbLocal = require('../db/dbConectionLocal'); 
-
-let pool; 
-
-(async () => {
+// Inicializar Firebase Admin SDK
+if (!admin.apps.length) {
   try {
-    await dbConnection.connect(); 
-    console.log('Conexión con la db remota exitosa: notification service'); 
-    pool = dbConnection; 
-  } catch (errRemota){
-    console.warn('Error con la db remota. Intentando conexión local... ', errRemota.message); 
-
-    try {
-      await dbLocal.connect(); 
-      console.log('Conexión con la db local exitosa: notification service'); 
-      pool = dbLocal; 
-    } catch (errLocal){
-      console.error('Error al conectar con la db local: ', errLocal.message); 
-    }
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        privateKeyId: process.env.FIREBASE_PRIVATE_KEY_ID,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        clientId: process.env.FIREBASE_CLIENT_ID
+      })
+    });
+    
+    console.log('🔥 [Firebase Admin] Inicializado correctamente');
+  } catch (error) {
+    console.error(' [Firebase Admin] Error al inicializar:', error.message);
   }
-})(); 
-
-//  Configurar VAPID
-webpush.setVapidDetails(
-  'mailto:tu-email@example.com',
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+}
 
 /**
- * Tipos de notificaciones disponibles
+ * Tipos de notificaciones
  */
 const NotificationType = {
   REMINDER: 'reminder',
@@ -46,7 +35,7 @@ const NotificationType = {
 };
 
 /**
- * Plantillas de mensajes según el tipo
+ * Plantillas de mensajes
  */
 const NotificationTemplates = {
   es: {
@@ -89,7 +78,7 @@ const NotificationTemplates = {
   en: {
     reminder: {
       title: 'We miss you! 👋',
-      body: "It's been a while since you used your card. Earn more benefits by visiting us!",
+      body: "It's been a while since you used your card. Earn more benefits!",
       icon: '🎁'
     },
     update_points: {
@@ -104,12 +93,12 @@ const NotificationTemplates = {
     },
     completion_strips: {
       title: 'Congratulations! 🎉',
-      body: 'You completed your collection! Your reward is waiting for you.',
+      body: 'You completed your collection! Your reward is waiting.',
       icon: '🏆'
     },
     completion_points: {
       title: 'Goal achieved! 🎯',
-      body: 'You reached {points} points! You can redeem your reward.',
+      body: 'You reached {points} points! Redeem your reward.',
       icon: '🎁'
     },
     welcome: {
@@ -125,20 +114,13 @@ const NotificationTemplates = {
   }
 };
 
-/**
- * Interpola variables en el mensaje
- */
 function interpolate(template, data) {
   return template.replace(/\{(\w+)\}/g, (_, key) => {
     const value = data[key];
-    console.log(`[interpolate] ${key} = ${value} (${typeof value})`);
     return value !== undefined && value !== null ? String(value) : `{${key}}`;
   });
 }
 
-/**
- * Obtiene el mensaje apropiado según tipo y datos
- */
 function getNotificationMessage(type, data = {}, lang = 'es') {
   const templates = NotificationTemplates[lang] || NotificationTemplates.es;
   let template;
@@ -169,7 +151,6 @@ async function sendAppleWalletNotification(serial) {
     const tokens = await listPushTokensBySerial(serial);
     
     if (!tokens || tokens.length === 0) {
-      console.log(`[Apple Notification] No tokens para serial: ${serial}`);
       return { success: false, message: 'No tokens found' };
     }
 
@@ -180,8 +161,6 @@ async function sendAppleWalletNotification(serial) {
     const successful = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
 
-    console.log(`[Apple Notification] Serial ${serial}: ${successful} éxitos, ${failed} fallos`);
-
     return {
       success: successful > 0,
       total: tokens.length,
@@ -189,23 +168,16 @@ async function sendAppleWalletNotification(serial) {
       failed
     };
   } catch (error) {
-    console.error('[Apple Notification] Error:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- *  OBTENER SUBSCRIPCIONES DE UN USUARIO (CORREGIDO)
+ * Obtener subscripciones FCM de un usuario
  */
 async function getWebPushSubscriptions(userId) {
   try {
-    //  Verificar que pool esté disponible
-    if (!pool) {
-      console.warn('[getWebPushSubscriptions] Pool no disponible aún');
-      return [];
-    }
-
-    const result = await pool.query(
+    const result = await db.query(
       'SELECT subscription FROM push_subscriptions WHERE user_id = $1',
       [userId]
     );
@@ -218,66 +190,39 @@ async function getWebPushSubscriptions(userId) {
 }
 
 /**
- *  ENVIAR NOTIFICACIÓN PWA (WEB PUSH) - FUNCIONAL
+ * ENVIAR NOTIFICACIÓN PWA CON FCM
  */
 async function sendPWANotification(userId, type, data = {}, lang = 'es') {
   try {
     const message = getNotificationMessage(type, data, lang);
     
-    const payload = {
-      notification: {
-        title: message.title,
-        body: message.body,
-        icon: '/public/WindoeLogo192.png',
-        badge: '/public/WindoeLogo192.png',
-        vibrate: [200, 100, 200],
-        data: {
-          type,
-          userId,
-          ...data
-        },
-        actions: [
-          {
-            action: 'open',
-            title: 'Ver tarjeta'
-          }
-        ]
-      }
-    };
-
-    console.log('[PWA Notification] Payload generado:', payload);
-
-    //  OBTENER SUBSCRIPCIONES Y ENVIAR
     const subscriptions = await getWebPushSubscriptions(userId);
     
     if (subscriptions.length === 0) {
-      console.log(`[PWA Notification] No hay subscripciones para userId: ${userId}`);
+      console.log(`[FCM]  No hay subscripciones para userId: ${userId}`);
       return { 
         success: false, 
-        message: 'No subscriptions found',
-        payload 
+        message: 'No subscriptions found'
       };
     }
 
-    console.log(`[PWA Notification] Enviando a ${subscriptions.length} dispositivos`);
+    console.log(`[FCM]  Enviando a ${subscriptions.length} dispositivo(s)`);
 
-    //  ENVIAR A TODOS LOS DISPOSITIVOS
     const results = await Promise.allSettled(
-      subscriptions.map(sub => 
-        webpush.sendNotification(sub, JSON.stringify(payload))
-      )
+      subscriptions.map(sub => sendFCMNotification(sub, message, { type, userId, ...data }))
     );
 
     const successful = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
 
-    console.log(`[PWA Notification] ${successful} enviadas, ${failed} fallidas`);
+    console.log(`[FCM]  Resultado: ${successful} éxito(s), ${failed} fallo(s)`);
 
-    //  LIMPIAR SUBSCRIPCIONES EXPIRADAS (410)
+    // Limpiar subscripciones expiradas
     for (let i = 0; i < results.length; i++) {
       if (results[i].status === 'rejected') {
         const error = results[i].reason;
-        if (error?.statusCode === 410) {
+        if (error?.statusCode === 410 || error?.message?.includes('NotRegistered')) {
+          console.log('[FCM] 🗑️ Limpiando subscripción expirada');
           await removeExpiredSubscription(subscriptions[i]);
         }
       }
@@ -287,34 +232,93 @@ async function sendPWANotification(userId, type, data = {}, lang = 'es') {
       success: successful > 0, 
       total: subscriptions.length,
       successful,
-      failed,
-      payload 
+      failed
     };
 
   } catch (error) {
-    console.error('[PWA Notification] Error:', error);
+    console.error('[FCM]  Error fatal:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- *  ELIMINAR SUBSCRIPCIÓN EXPIRADA (CORREGIDO)
+ * Envía notificación usando Firebase Admin SDK
+ */
+async function sendFCMNotification(subscription, message, data) {
+  try {
+    const token = subscription.endpoint.split('/').pop();
+
+    console.log('[FCM] 🔑 Token:', token.substring(0, 20) + '...');
+
+    let iconUrl = 'https://wallet-app-backend.fly.dev/public/WindoeLogo192.png';
+    let badgeUrl = 'https://wallet-app-backend.fly.dev/public/WindoeLogo192.png';
+    
+    if (data.businessId) {
+      iconUrl = `https://wallet-app-backend.fly.dev/api/public/assets/logo/${data.businessId}`;
+      badgeUrl = `https://wallet-app-backend.fly.dev/api/public/assets/logo/${data.businessId}`;
+      console.log('[FCM] 🎨 Usando logo del negocio:', data.businessId);
+    }
+
+    const payload = {
+      token: token,
+      notification: {
+        title: message.title,
+        body: message.body
+      },
+      data: {
+        type: String(data.type || ''),
+        userId: String(data.userId || ''),
+        businessId: String(data.businessId || ''),
+        timestamp: String(Date.now()),
+        // ✅ Pasar URLs como data para que el SW las use
+        icon: iconUrl,
+        badge: badgeUrl
+      },
+      webpush: {
+        headers: {
+          Urgency: 'high' // ← Prioridad alta
+        },
+        notification: {
+          title: message.title,
+          body: message.body,
+          icon: iconUrl,
+          badge: badgeUrl,
+          requireInteraction: false,
+          tag: 'windoe-notification'
+        },
+        fcm_options: {
+          link: '/'
+        }
+      }
+    };
+
+    console.log('[FCM] 📤 Enviando con Admin SDK...');
+    console.log('[FCM] 🖼️ Icon URL:', iconUrl);
+    console.log('[FCM] 📦 Payload completo:', JSON.stringify(payload, null, 2));
+    
+    const result = await admin.messaging().send(payload);
+    console.log('[FCM] ✅ Enviado:', result);
+    
+    return { success: true, messageId: result };
+
+  } catch (error) {
+    console.error('[FCM] ❌ Error:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Eliminar subscripción expirada
  */
 async function removeExpiredSubscription(subscription) {
   try {
-    //  Verificar que pool esté disponible
-    if (!pool) {
-      console.warn('[removeExpiredSubscription] Pool no disponible');
-      return;
-    }
-
-    await pool.query(
+    await db.query(
       'DELETE FROM push_subscriptions WHERE subscription = $1',
       [subscription]
     );
-    console.log('[removeExpiredSubscription] Subscription eliminada');
+    console.log('[removeExpiredSubscription] ✅ Subscription eliminada');
   } catch (error) {
-    console.error('[removeExpiredSubscription] Error:', error);
+    console.error('[removeExpiredSubscription]  Error:', error);
   }
 }
 
@@ -333,12 +337,10 @@ async function sendNotification({
     pwa: null
   };
 
-  // Apple Wallet
   if (serial) {
     results.apple = await sendAppleWalletNotification(serial);
   }
 
-  // PWA
   if (userId) {
     results.pwa = await sendPWANotification(userId, type, data, lang);
   }
@@ -346,10 +348,7 @@ async function sendNotification({
   return results;
 }
 
-/**
- * Helpers específicos
- */
-
+// Helpers específicos
 async function sendReminderNotification(serial, userId, lang = 'es') {
   return sendNotification({
     serial,
@@ -370,14 +369,6 @@ async function sendPointsUpdateNotification(serial, userId, points, lang = 'es')
 }
 
 async function sendStripsUpdateNotification(serial, userId, collected, required, lang = 'es') {
-  console.log('[sendStripsUpdateNotification] PARAMS:', {
-    serial,
-    userId,
-    collected,
-    required,
-    lang
-  });
-
   return sendNotification({
     serial,
     userId,
@@ -418,10 +409,6 @@ async function sendRewardReadyNotification(serial, userId, rewardTitle, lang = '
     data: { reward_title: rewardTitle },
     lang
   });
-}
-
-async function registerToken(serial, userId,) {
-  
 }
 
 module.exports = {

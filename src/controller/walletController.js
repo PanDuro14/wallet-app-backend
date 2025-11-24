@@ -55,14 +55,14 @@ async function createGoogle(req, res) {
       });
     }
 
-    console.log('[createGoogle] Request:', {
-      cardCode,
-      businessId,
-      variant,
-      points,
-      strips_collected,
-      strips_required
-    });
+    ////console.log('[createGoogle] Request:', {
+    //  cardCode,
+    //  businessId,
+    //  variant,
+    //  points,
+    //  strips_collected,
+    //  strips_required
+    //});
 
     // Usa el process (trae brand del negocio) - ahora con soporte de variantes
     const url = await issueGoogleWalletLink({
@@ -89,7 +89,7 @@ async function createGoogle(req, res) {
       variant: variant || 'points'
     });
   } catch (e) {
-    console.error('[Google Wallet] create error:', e);
+    ////console.error('[Google Wallet] create error:', e);
     return res.status(500).json({ 
       error: 'No se pudo generar el enlace',
       details: e.message 
@@ -135,14 +135,14 @@ async function createGoogleRestApi(req, res) {
       });
     }
 
-    console.log('[createGoogleRestApi] Request:', {
-      cardCode,
-      businessId,
-      variant,
-      points,
-      strips_collected,
-      strips_required
-    });
+    ////console.log('[createGoogleRestApi] Request:', {
+    //  cardCode,
+    //  businessId,
+    //  variant,
+    //  points,
+    //  strips_collected,
+    //  strips_required
+    //});
 
     // Crear/actualizar objeto usando REST API
     const result = await createGoogleWalletObject({
@@ -179,7 +179,7 @@ async function createGoogleRestApi(req, res) {
         : 'Objeto creado exitosamente'
     });
   } catch (e) {
-    console.error('[Google Wallet REST] create error:', e);
+    //console.error('[Google Wallet REST] create error:', e);
     return res.status(500).json({
       error: 'No se pudo crear/actualizar el objeto',
       details: e.message
@@ -227,12 +227,12 @@ async function createGoogleUnified(req, res) {
       });
     }
 
-    console.log('[createGoogleUnified] Request:', {
-      cardCode,
-      businessId,
-      variant,
-      useRestApi: useRestApi !== false
-    });
+    //console.log('[createGoogleUnified] Request:', {
+    //  cardCode,
+    //  businessId,
+    //  variant,
+    //  useRestApi: useRestApi !== false
+    //});
 
     // Usar wrapper unificado
     const result = await issueGoogleWallet({
@@ -261,7 +261,7 @@ async function createGoogleUnified(req, res) {
       variant: variant || 'points'
     });
   } catch (e) {
-    console.error('[Google Wallet Unified] create error:', e);
+    //console.error('[Google Wallet Unified] create error:', e);
     return res.status(500).json({
       error: 'No se pudo crear la tarjeta',
       details: e.message
@@ -295,7 +295,7 @@ async function updateGooglePoints(req, res) {
       });
     }
 
-    console.log('[updateGooglePoints] Actualizando:', { cardCode, newPoints });
+    //console.log('[updateGooglePoints] Actualizando:', { cardCode, newPoints });
 
     const result = await updateLoyaltyPoints(cardCode, newPoints);
 
@@ -305,7 +305,7 @@ async function updateGooglePoints(req, res) {
       message: 'Puntos actualizados exitosamente'
     });
   } catch (e) {
-    console.error('[Google Wallet] update points error:', e);
+    //console.error('[Google Wallet] update points error:', e);
     return res.status(500).json({
       error: 'No se pudieron actualizar los puntos',
       details: e.message
@@ -346,11 +346,11 @@ async function updateGoogleStrips(req, res) {
       });
     }
 
-    console.log('[updateGoogleStrips] Actualizando:', { 
-      cardCode, 
-      collected, 
-      required 
-    });
+    //console.log('[updateGoogleStrips] Actualizando:', { 
+    //  cardCode, 
+    //  collected, 
+    //  required 
+    //});
 
     const result = await updateLoyaltyStrips(
       cardCode, 
@@ -367,7 +367,7 @@ async function updateGoogleStrips(req, res) {
         : 'Strips actualizados exitosamente'
     });
   } catch (e) {
-    console.error('[Google Wallet] update strips error:', e);
+    //console.error('[Google Wallet] update strips error:', e);
     return res.status(500).json({
       error: 'No se pudieron actualizar los strips',
       details: e.message
@@ -406,7 +406,7 @@ async function ensureGoogleClass(req, res) {
       message: 'Clase asegurada exitosamente'
     });
   } catch (e) {
-    console.error('[Google Wallet] ensure class error:', e);
+    //console.error('[Google Wallet] ensure class error:', e);
     res.status(500).json({ 
       success: false, 
       error: e.message 
@@ -460,7 +460,7 @@ async function debugGoogle(req, res) {
       loyaltyObject: payload.payload?.loyaltyObjects?.[0]
     });
   } catch (e) {
-    console.error('[Google Wallet] debug error:', e);
+    //console.error('[Google Wallet] debug error:', e);
     return res.status(500).json({ 
       error: e.message 
     });
@@ -506,13 +506,13 @@ async function addToAppleWallet(req, res) {
       });
     }
 
-    console.log('[addToAppleWallet] Request:', {
-      cardCode,
-      businessId,
-      variant,
-      points,
-      strips_collected
-    });
+    //console.log('[addToAppleWallet] Request:', {
+    //  cardCode,
+    //  businessId,
+    //  variant,
+    //  points,
+    //  strips_collected
+    //});
 
     const pkpassBuffer = await issueAppleWalletPkpass({
       cardCode,
@@ -540,7 +540,7 @@ async function addToAppleWallet(req, res) {
 
     return res.send(pkpassBuffer);
   } catch (e) {
-    console.error('[Apple Wallet] create error:', e?.message || e);
+    //console.error('[Apple Wallet] create error:', e?.message || e);
     return res.status(500).json({ 
       error: 'No se pudo generar el .pkpass',
       details: e.message 

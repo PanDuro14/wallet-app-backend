@@ -27,9 +27,9 @@ const createUser = async (...args) => {
           newUser.id,
           lang
         );
-        console.log(`✅ Bienvenida enviada a usuario ${newUser.id}`);
+        ////console.log(`✅ Bienvenida enviada a usuario ${newUser.id}`);
       } catch (error) {
-        console.error(`❌ Error enviando bienvenida a usuario ${newUser.id}:`, error.message);
+        ////console.error(`❌ Error enviando bienvenida a usuario ${newUser.id}:`, error.message);
         // No lanzar error para no afectar la creación
       }
     });
@@ -57,7 +57,7 @@ const updateUser = async (id, arg2, email, phone) => {
       try {
         await _handleUpdateNotifications(id, updatedUser, patchObj);
       } catch (error) {
-        console.error(`❌ Error enviando notificaciones para usuario ${id}:`, error.message);
+        ////console.error(`❌ Error enviando notificaciones para usuario ${id}:`, error.message);
       }
     });
   }
@@ -71,13 +71,13 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
   const { serial_number, card_type, points, strips_collected, strips_required } = updatedUser;
 
   if (!serial_number) {
-    console.log(`⚠️ Usuario ${userId} no tiene serial_number, omitiendo notificaciones`);
+    ////console.log(`⚠️ Usuario ${userId} no tiene serial_number, omitiendo notificaciones`);
     return;
   }
 
   // ===== CASO 1: ACTUALIZACIÓN DE PUNTOS =====
   if (patchObj.points !== undefined || patchObj.hasOwnProperty('points')) {
-    console.log(`📊 Detectada actualización de puntos para usuario ${userId}: ${points} puntos`);
+    ////console.log(`📊 Detectada actualización de puntos para usuario ${userId}: ${points} puntos`);
     
     await notificationService.sendPointsUpdateNotification(
       serial_number,
@@ -86,7 +86,7 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
       lang
     );
     
-    console.log(`✅ Notificación de puntos enviada a usuario ${userId}`);
+    ////console.log(`✅ Notificación de puntos enviada a usuario ${userId}`);
     return; // Solo una notificación por actualización
   }
 
@@ -95,11 +95,11 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
     const collected = strips_collected || 0;
     const required = strips_required || 10;
     
-    console.log(`🎫 Detectada actualización de strips para usuario ${userId}: ${collected}/${required}`);
+    ////console.log(`🎫 Detectada actualización de strips para usuario ${userId}: ${collected}/${required}`);
 
     // Verificar si completó la colección
     if (collected >= required) {
-      console.log(`🎉 Usuario ${userId} completó su colección!`);
+      ////console.log(`🎉 Usuario ${userId} completó su colección!`);
       
       await notificationService.sendCompletionNotification(
         serial_number,
@@ -108,7 +108,7 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
         lang
       );
       
-      console.log(`✅ Notificación de completación enviada a usuario ${userId}`);
+      ////console.log(`✅ Notificación de completación enviada a usuario ${userId}`);
     } else {
       // Progreso normal
       await notificationService.sendStripsUpdateNotification(
@@ -119,7 +119,7 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
         lang
       );
       
-      console.log(`✅ Notificación de progreso enviada a usuario ${userId}`);
+      ////console.log(`✅ Notificación de progreso enviada a usuario ${userId}`);
     }
     
     return;
@@ -129,7 +129,7 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
   if (patchObj.reward_unlocked === true) {
     const rewardTitle = patchObj.reward_title || updatedUser.reward_title || 'Tu premio';
     
-    console.log(`🎁 Premio desbloqueado para usuario ${userId}: ${rewardTitle}`);
+    ////console.log(`🎁 Premio desbloqueado para usuario ${userId}: ${rewardTitle}`);
     
     await notificationService.sendRewardReadyNotification(
       serial_number,
@@ -138,12 +138,12 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
       lang
     );
     
-    console.log(`✅ Notificación de premio enviada a usuario ${userId}`);
+    ////console.log(`✅ Notificación de premio enviada a usuario ${userId}`);
     return;
   }
 
   // Si no es ninguno de los casos anteriores, no enviar notificación
-  console.log(`ℹ️ Actualización de usuario ${userId} sin notificaciones automáticas`);
+  ////console.log(`ℹ️ Actualización de usuario ${userId} sin notificaciones automáticas`);
 }
 
 // ===== MÉTODOS ESPECÍFICOS PARA ACTUALIZAR CON NOTIFICACIONES EXPLÍCITAS =====
@@ -179,9 +179,9 @@ const updatePoints = async (userId, deltaPoints, lang = 'es') => {
           newPoints,
           lang
         );
-        console.log(`✅ Notificación de puntos enviada a usuario ${userId}`);
+        //console.log(`✅ Notificación de puntos enviada a usuario ${userId}`);
       } catch (error) {
-        console.error(`❌ Error enviando notificación a usuario ${userId}:`, error.message);
+        //console.error(`❌ Error enviando notificación a usuario ${userId}:`, error.message);
       }
     });
   }
@@ -223,7 +223,7 @@ const updateStrips = async (userId, deltaStrips, lang = 'es') => {
             'strips',
             lang
           );
-          console.log(`🎉 Usuario ${userId} completó su colección (${newStrips}/${requiredStrips})`);
+          //console.log(`🎉 Usuario ${userId} completó su colección (${newStrips}/${requiredStrips})`);
         } else {
           // Progreso normal
           await notificationService.sendStripsUpdateNotification(
@@ -233,10 +233,10 @@ const updateStrips = async (userId, deltaStrips, lang = 'es') => {
             requiredStrips,
             lang
           );
-          console.log(`✅ Progreso actualizado para usuario ${userId} (${newStrips}/${requiredStrips})`);
+          //console.log(`✅ Progreso actualizado para usuario ${userId} (${newStrips}/${requiredStrips})`);
         }
       } catch (error) {
-        console.error(`❌ Error enviando notificación a usuario ${userId}:`, error.message);
+        //console.error(`❌ Error enviando notificación a usuario ${userId}:`, error.message);
       }
     });
   }
@@ -277,7 +277,7 @@ const getInactiveUsers = async (inactiveDays = 7, businessId = null) => {
     return await usersDb.getInactiveUsers(inactiveDays, businessId);
   } catch (error) {
     // Si el método no existe en usersDb, retornar array vacío
-    console.warn('Método getInactiveUsers no implementado en usersDb');
+    //console.warn('Método getInactiveUsers no implementado en usersDb');
     return [];
   }
 };

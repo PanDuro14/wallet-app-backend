@@ -1,7 +1,7 @@
 // routes/pwaWalletRoutes.js
 // Definición de rutas HTTP - Solo mapeo de endpoints
 const express = require('express');
-const router = express.Router();
+const router = express.Router(); 
 const pwaWalletController = require('../../controller/pwaWalletController');
 
 // ========================================

@@ -35,11 +35,11 @@ const loginBusiness = async (req, res) => {
     return res.status(200).json({ success: true, token, data });
 
   } catch (err) {
-    console.error('[loginBusiness][controller]', {
-      message: err?.message ?? String(err),
-      cause: err?.cause?.message ?? String(err?.cause ?? ''),
-      stack: err?.stack
-    });
+    //console.error('[loginBusiness][controller]', {
+    //  message: err?.message ?? String(err),
+    //  cause: err?.cause?.message ?? String(err?.cause ?? ''),
+    //  stack: err?.stack
+    //});
     return res.status(502).json({ error: 'Error al hacer login del negocio' });
   }
 };
@@ -86,13 +86,13 @@ const createBusiness = async (req, res) => {
       return res.status(400).json({ error: 'Se requieren las imágenes de los strips' });
     }
 
-    console.log('Archivos recibidos:', req.files);
+    //console.log('Archivos recibidos:', req.files);
 
     const business = await businessesProcess.createBusiness(name, email, password, logoBuffer, stripImageOnBuffer, stripImageOffBuffer, created_at, updated_at); 
 
     res.status(201).json({ message: 'Negocio creado con éxito', business });
   } catch (error) {
-    console.error('Error al crear el negocio:', error); 
+    //console.error('Error al crear el negocio:', error); 
     res.status(502).json({ error: 'Error al crear el negocio', details: error.message });
   }
 };
@@ -109,45 +109,45 @@ const updateBusiness = async (req, res) => {
     // Campos de texto
     if (name !== undefined && name !== null && name.trim() !== '') {
       updates.name = name.trim();
-      console.log('[updateBusiness] ✓ Nombre a actualizar:', updates.name);
+      //console.log('[updateBusiness] ✓ Nombre a actualizar:', updates.name);
     }
 
     if (email !== undefined && email !== null && email.trim() !== '') {
       updates.email = email.toLowerCase().trim();
-      console.log('[updateBusiness] ✓ Email a actualizar:', updates.email);
+      //console.log('[updateBusiness] ✓ Email a actualizar:', updates.email);
     }
 
     if (password !== undefined && password !== null && password.trim() !== '') {
       updates.password = password.trim();
-      console.log('[updateBusiness] ✓ Password a actualizar: [OCULTO]');
+      //console.log('[updateBusiness] ✓ Password a actualizar: [OCULTO]');
     }
 
     // Archivos/Imágenes (buffers)
     if (req.files?.['logo']?.[0]) {
       updates.logo = req.files['logo'][0].buffer;
-      console.log('[updateBusiness] ✓ Logo a actualizar:', updates.logo.length, 'bytes');
+      //console.log('[updateBusiness] ✓ Logo a actualizar:', updates.logo.length, 'bytes');
     }
 
     if (req.files?.['strip_image_on']?.[0]) {
       updates.strip_image_on = req.files['strip_image_on'][0].buffer;
-      console.log('[updateBusiness] ✓ Strip image ON a actualizar:', updates.strip_image_on.length, 'bytes');
+      //console.log('[updateBusiness] ✓ Strip image ON a actualizar:', updates.strip_image_on.length, 'bytes');
     }
 
     if (req.files?.['strip_image_off']?.[0]) {
       updates.strip_image_off = req.files['strip_image_off'][0].buffer;
-      console.log('[updateBusiness] ✓ Strip image OFF a actualizar:', updates.strip_image_off.length, 'bytes');
+      //console.log('[updateBusiness] ✓ Strip image OFF a actualizar:', updates.strip_image_off.length, 'bytes');
     }
 
     // Verificar que hay algo que actualizar
     if (Object.keys(updates).length === 0) {
-      console.log('[updateBusiness] ⚠️ No se recibieron campos para actualizar');
+      //console.log('[updateBusiness] ⚠️ No se recibieron campos para actualizar');
       return res.status(400).json({ 
         error: 'No se especificaron campos para actualizar',
         hint: 'Envía al menos un campo: name, email, password, logo, strip_image_on, strip_image_off'
       });
     }
 
-    console.log('[updateBusiness] Campos a actualizar:', Object.keys(updates));
+    //console.log('[updateBusiness] Campos a actualizar:', Object.keys(updates));
 
     // Actualizar
     const data = await businessesProcess.updateBusiness(id, updates);
@@ -173,7 +173,7 @@ const updateBusiness = async (req, res) => {
 
     res.status(200).json(response);
   } catch (error) {
-    console.error('[updateBusiness] Error:', error); 
+    //console.error('[updateBusiness] Error:', error); 
     res.status(502).json({ 
       error: 'Error al actualizar el negocio', 
       details: error.message 
@@ -243,7 +243,7 @@ const createBusinessWithDesign = async (req, res) => {
     const out = await createBusinessWithDesignProcess({ business, design });
     return res.status(201).json(out);
   } catch (e) {
-    console.error('createBusinessWithDesign error:', e);
+    //console.error('createBusinessWithDesign error:', e);
     return res.status(e.statusCode || 500).json({ error: e.message || 'Server error' });
   }
 };

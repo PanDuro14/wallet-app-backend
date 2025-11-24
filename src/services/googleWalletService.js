@@ -97,12 +97,12 @@ function buildModulesByVariant({
   // Normalizar variante
   const normalizedVariant = String(variant || 'points').toLowerCase().trim();
   
-  console.log('[buildModulesByVariant] Generando módulos para:', {
-    variant: normalizedVariant,
-    strips_collected,
-    strips_required,
-    isComplete
-  });
+  //console.log('[buildModulesByVariant] Generando módulos para:', {
+  //  variant: normalizedVariant,
+  //  strips_collected,
+  //  strips_required,
+  //  isComplete
+  //});
 
   const textModules = [];
   let loyaltyPoints = undefined;
@@ -236,7 +236,7 @@ async function ensureLoyaltyClass({
   const baseUrl = process.env.PUBLIC_BASE_URL || process.env.WALLET_BASE_URL || '';
   const logoUri = `${baseUrl}/api/public/assets/logo/${businessId}`;
   
-  console.log('[ensureLoyaltyClass] Logo URI:', logoUri);
+  //console.log('[ensureLoyaltyClass] Logo URI:', logoUri);
 
   // Verificar si la clase ya existe
   const getResp = await fetch(`${BASE_URL}/loyaltyClass/${encodeURIComponent(classId)}`, {
@@ -245,13 +245,13 @@ async function ensureLoyaltyClass({
 
   if (getResp.ok) {
     // ⚠️ La clase ya existe
-    console.log('[ensureLoyaltyClass] ⚠️ Clase YA EXISTE - Los colores NO se pueden cambiar en clases APPROVED');
-    console.log('[ensureLoyaltyClass] Para cambiar colores necesitas:', {
-      opcion1: 'Ejecutar: node scripts/deleteGoogleWalletClass.js ' + businessId,
-      opcion2: 'Crear un nuevo businessId',
-      classId,
-      note: 'Google no permite modificar clases con reviewStatus=APPROVED'
-    });
+    //console.log('[ensureLoyaltyClass] ⚠️ Clase YA EXISTE - Los colores NO se pueden cambiar en clases APPROVED');
+    //console.log('[ensureLoyaltyClass] Para cambiar colores necesitas:', {
+    //  opcion1: 'Ejecutar: node scripts/deleteGoogleWalletClass.js ' + businessId,
+    //  opcion2: 'Crear un nuevo businessId',
+    //  classId,
+    //  note: 'Google no permite modificar clases con reviewStatus=APPROVED'
+    //});
     
     return classId;
   }
@@ -276,13 +276,13 @@ async function ensureLoyaltyClass({
     body.hexFontColor = toHexColor(hexForegroundColor);
   }
 
-  console.log('[ensureLoyaltyClass] Creando clase:', {
-    classId,
-    programName,
-    logoUri,
-    hexBackgroundColor: body.hexBackgroundColor,
-    hexFontColor: body.hexFontColor || 'default'
-  });
+  //console.log('[ensureLoyaltyClass] Creando clase:', {
+  //  classId,
+  //  programName,
+  //  logoUri,
+  //  hexBackgroundColor: body.hexBackgroundColor,
+  //  hexFontColor: body.hexFontColor || 'default'
+  //});
 
   const postResp = await fetch(`${BASE_URL}/loyaltyClass`, {
     method: 'POST',
@@ -505,12 +505,12 @@ async function createOrUpdateLoyaltyObject({
 
   const result = await resp.json();
 
-  console.log('[createOrUpdateLoyaltyObject] ✓ Objeto guardado:', {
-    objectId,
-    existed,
-    variant: normalizedVariant,
-    hasColors: !!hexBackgroundColor
-  });
+  //console.log('[createOrUpdateLoyaltyObject] ✓ Objeto guardado:', {
+  //  objectId,
+  //  existed,
+  //  variant: normalizedVariant,
+  //  hasColors: !!hexBackgroundColor
+  //});
 
   return { 
     objectId, 
@@ -532,7 +532,7 @@ async function updateLoyaltyPoints(cardCode, newPoints) {
     }
   };
 
-  console.log(`[Google Wallet API] Actualizando puntos: ${cardCode} -> ${newPoints}`);
+  //console.log(`[Google Wallet API] Actualizando puntos: ${cardCode} -> ${newPoints}`);
 
   const resp = await fetch(`${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`, {
     method: 'PATCH',
@@ -548,7 +548,7 @@ async function updateLoyaltyPoints(cardCode, newPoints) {
     throw new Error(`PATCH loyaltyObject (points) falló (${resp.status}): ${txt}`);
   }
 
-  console.log(`[Google Wallet API] ✓ Puntos actualizados`);
+  //console.log(`[Google Wallet API] ✓ Puntos actualizados`);
   return { ok: true, objectId, points: newPoints };
 }
 
@@ -573,7 +573,7 @@ async function updateLoyaltyStrips(cardCode, strips_collected, strips_required, 
     textModulesData
   };
 
-  console.log(`[Google Wallet API] Actualizando strips: ${cardCode} -> ${strips_collected}/${strips_required}`);
+  //console.log(`[Google Wallet API] Actualizando strips: ${cardCode} -> ${strips_collected}/${strips_required}`);
 
   const resp = await fetch(`${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`, {
     method: 'PATCH',
@@ -589,7 +589,7 @@ async function updateLoyaltyStrips(cardCode, strips_collected, strips_required, 
     throw new Error(`PATCH loyaltyObject (strips) falló (${resp.status}): ${txt}`);
   }
 
-  console.log(`[Google Wallet API] ✓ Strips actualizados`);
+  //console.log(`[Google Wallet API] ✓ Strips actualizados`);
   return { ok: true, objectId, strips_collected, strips_required, isComplete };
 }
 
@@ -673,7 +673,7 @@ async function deleteClass(businessId, card_detail_id = null) {
   const classId = classIdForBusiness(businessId, card_detail_id);
   const accessToken = await getAccessToken();
 
-  console.log('🗑️  Intentando borrar clase:', classId);
+  //console.log('🗑️  Intentando borrar clase:', classId);
 
   const resp = await fetch(`${BASE_URL}/loyaltyClass/${encodeURIComponent(classId)}`, {
     method: 'DELETE',
@@ -681,14 +681,14 @@ async function deleteClass(businessId, card_detail_id = null) {
   });
 
   if (resp.ok) {
-    console.log('✅ Clase borrada exitosamente:', classId);
+    //console.log('✅ Clase borrada exitosamente:', classId);
     return true;
   } else if (resp.status === 404) {
-    console.log('⚠️  La clase no existe:', classId);
+    //console.log('⚠️  La clase no existe:', classId);
     return false;
   } else {
     const text = await resp.text().catch(() => '');
-    console.error('❌ Error al borrar clase:', { status: resp.status, error: text });
+    //console.error('❌ Error al borrar clase:', { status: resp.status, error: text });
     return false;
   }
 }

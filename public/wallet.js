@@ -1,4 +1,4 @@
-/* wallet.js - PWA con auto-actualización y Push Notifications */
+/* wallet.js - PWA con Firebase Cloud Messaging */
 
 // ===== TRADUCCIÓN =====
 const translations = {
@@ -17,21 +17,9 @@ const translations = {
     installError: 'Error al instalar: ',
     installInstructions: {
       title: '📱 Instalar en tu iPhone',
-      step1: {
-        title: 'Toca el botón de compartir',
-        desc: 'En la barra inferior de Safari',
-        icon: '⬆️'
-      },
-      step2: {
-        title: 'Selecciona "Añadir a inicio"',
-        desc: 'Desplázate hacia abajo en el menú',
-        icon: '➕ 🏠'
-      },
-      step3: {
-        title: 'Confirma',
-        desc: 'Toca "Añadir" en la esquina superior derecha',
-        icon: '✅'
-      },
+      step1: { title: 'Toca el botón de compartir', desc: 'En la barra inferior de Safari', icon: '⬆️' },
+      step2: { title: 'Selecciona "Añadir a inicio"', desc: 'Desplázate hacia abajo en el menú', icon: '➕ 🏠' },
+      step3: { title: 'Confirma', desc: 'Toca "Añadir" en la esquina superior derecha', icon: '' },
       note: '💡 La app aparecerá en tu pantalla de inicio como cualquier otra aplicación'
     },
     manualInstructions: {
@@ -55,21 +43,9 @@ const translations = {
     installError: 'Installation error: ',
     installInstructions: {
       title: '📱 Install on your iPhone',
-      step1: {
-        title: 'Tap the share button',
-        desc: 'At the bottom bar of Safari',
-        icon: '⬆️'
-      },
-      step2: {
-        title: 'Select "Add to Home Screen"',
-        desc: 'Scroll down in the menu',
-        icon: '➕ 🏠'
-      },
-      step3: {
-        title: 'Confirm',
-        desc: 'Tap "Add" in the top right corner',
-        icon: '✅'
-      },
+      step1: { title: 'Tap the share button', desc: 'At the bottom bar of Safari', icon: '⬆️' },
+      step2: { title: 'Select "Add to Home Screen"', desc: 'Scroll down in the menu', icon: '➕ 🏠' },
+      step3: { title: 'Confirm', desc: 'Tap "Add" in the top right corner', icon: '' },
       note: '💡 The app will appear on your home screen like any other application'
     },
     manualInstructions: {
@@ -79,6 +55,19 @@ const translations = {
     }
   }
 };
+
+// Verificar entorno seguro
+(function checkEnvironment() {
+  const isSecure = location.protocol === 'https:' || 
+                   location.hostname === 'localhost' || 
+                   location.hostname === '127.0.0.1';
+  
+  if (!isSecure) {
+    console.error('⚠️ Push notifications requieren HTTPS o localhost');
+  } else {
+    console.log('✅ Entorno seguro para push notifications');
+  }
+})();
 
 function detectLanguage() {
   const browserLang = navigator.language || navigator.userLanguage;
@@ -90,11 +79,7 @@ let currentLang = detectLanguage();
 function t(key) {
   const keys = key.split('.');
   let value = translations[currentLang];
-  
-  for (const k of keys) {
-    value = value?.[k];
-  }
-  
+  for (const k of keys) { value = value?.[k]; }
   return value || key;
 }
 
@@ -110,56 +95,61 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
                     window.navigator.standalone === true;
 
-// ===== SERVICE WORKER CON AUTO-ACTUALIZACIÓN =====
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then((registration) => {
-        console.log('✅ Service Worker registered:', registration);
-        
-        return navigator.serviceWorker.ready.then((reg) => {
-          console.log('✅ Service Worker ready');
-          setupPushNotifications(reg);
-          setupMessageListener();
-          return reg;
-        });
-      })
-      .then(() => {
-        setTimeout(updateInstallButton, 500);
-      })
-      .catch((error) => {
-        console.error('❌ Error registering Service Worker:', error);
-      });
-  });
-}
 
-// ===== FIX CRÍTICO: ESCUCHAR MENSAJES INMEDIATAMENTE =====
-setupMessageListener();
-navigator.serviceWorker.onmessage = (event) => {
-  console.log("[PWA] (onmessage) Mensaje del SW:", event.data);
 
-  if (event.data?.type === 'UPDATE_AVAILABLE' && serial) {
-    console.log("🔄 Recargando tarjeta por mensaje SW");
-    loadCard(serial);
-  }
+// ===== FIREBASE CONFIG =====
+const firebaseConfig = {
+  apiKey: "AIzaSyBaDXj8GMbdy3OwwshyNBBClvNjUephmpQ",
+  authDomain: "windoe-loyalty-wallet.firebaseapp.com",
+  projectId: "windoe-loyalty-wallet",
+  storageBucket: "windoe-loyalty-wallet.firebasestorage.app",
+  messagingSenderId: "556983962648",
+  appId: "1:556983962648:web:95da994b6d6b931558876d"
 };
 
-// ===== ESCUCHAR MENSAJES DEL SERVICE WORKER =====
-function setupMessageListener() {
-  console.log("📡 Configurando listener de mensajes...");
+// Configurar listener de SW
+console.log('📡 [INIT] Configurando listener ANTES de SW...');
 
-  if (!navigator.serviceWorker) return;
+if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+  navigator.serviceWorker.addEventListener('message', handleSWMessage);
+  console.log('✓ [INIT] Listener configurado (SW ya activo)');
+}
 
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    console.log('[PWA] Mensaje recibido del SW:', event.data);
+function handleSWMessage(event) {
+  console.log('[PWA] 📨 Mensaje del SW:', event.data);
+  if (event.data?.type === 'UPDATE_AVAILABLE') {
+    console.log('🔄 [PWA] Actualización disponible, recargando tarjeta...');
+    if (serial) loadCard(serial);
+  }
+}
 
-    if (event.data?.type === 'UPDATE_AVAILABLE') {
-      console.log('🔄 [PWA] Actualización disponible, recargando...');
-      if (serial) loadCard(serial);
+// ===== SERVICE WORKER =====
+let swRegistration = null;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      console.log('[SW] 📝 Registrando Service Worker...');
+      
+      swRegistration = await navigator.serviceWorker.register('/service-worker.js');
+      console.log('✓ [SW] Registrado:', swRegistration.scope);
+
+      await navigator.serviceWorker.ready;
+      console.log('✓ [SW] Ready y activo');
+
+      if (!navigator.serviceWorker.controller) {
+        navigator.serviceWorker.addEventListener('message', handleSWMessage);
+      }
+
+      // Configurar push con Firebase
+      await setupPushNotifications(swRegistration);
+
+      setTimeout(updateInstallButton, 500);
+
+    } catch (error) {
+      console.error('❌ [SW] Error:', error);
     }
   });
-
-  console.log('✅ Listener de mensajes listo');
 }
 
 // ===== MANIFEST DINÁMICO =====
@@ -177,10 +167,18 @@ window.addEventListener('beforeinstallprompt', (e) => {
   updateInstallButton();
 });
 
-window.addEventListener('appinstalled', () => {
+window.addEventListener('appinstalled', async () => {
   console.log('✅ App installed');
   deferredPrompt = null;
   updateInstallButton();
+  
+  setTimeout(() => {
+    alert('✅ App instalada!\n\n' +
+          '📱 Para activar las notificaciones:\n' +
+          '1. Cierra esta ventana\n' +
+          '2. Abre la app desde el ícono instalado\n\n' +
+          'Las notificaciones se activarán automáticamente.');
+  }, 500);
 });
 
 // ===== INSTALACIÓN =====
@@ -203,21 +201,11 @@ async function installPWA() {
 
   if (deferredPrompt) {
     try {
-      console.log('🚀 Showing installation prompt...');
       await deferredPrompt.prompt();
-      
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`👤 User response: ${outcome}`);
-      
-      if (outcome === 'accepted') {
-        console.log('✅ User accepted installation');
-      } else {
-        console.log('❌ User declined installation');
-      }
-      
       deferredPrompt = null;
       updateInstallButton();
-      
     } catch (error) {
       console.error('❌ Error during installation:', error);
       alert(t('installError') + error.message);
@@ -232,13 +220,7 @@ function showManualInstallInstructions() {
   const isEdge = /Edg/.test(navigator.userAgent);
   
   let instructions = t('manualInstructions.intro');
-  
-  if (isChrome || isEdge) {
-    instructions += t('manualInstructions.chrome');
-  } else {
-    instructions += t('manualInstructions.other');
-  }
-  
+  instructions += (isChrome || isEdge) ? t('manualInstructions.chrome') : t('manualInstructions.other');
   alert(instructions);
 }
 
@@ -248,17 +230,9 @@ function closeInstallModal() {
 
 function updateInstallButton() {
   const installBtn = document.getElementById('install-btn');
-  if (!installBtn) {
-    console.log('⚠️ Install button does not exist yet');
-    return;
-  }
+  if (!installBtn) return;
 
-  console.log('🔄 Updating button...', {
-    isStandalone,
-    isIOS,
-    hasDeferredPrompt: !!deferredPrompt,
-    promptCaptured
-  });
+  console.log('🔄 Updating button...', { isStandalone, isIOS, hasDeferredPrompt: !!deferredPrompt });
 
   if (isStandalone) {
     installBtn.style.display = 'none';
@@ -275,7 +249,6 @@ function updateInstallButton() {
   }
 
   if (deferredPrompt) {
-    console.log('✅ Button ready with available prompt');
     installBtn.style.display = 'flex';
     installBtn.innerHTML = `⬇️ ${t('installApp')}`;
     installBtn.classList.remove('ios');
@@ -285,7 +258,6 @@ function updateInstallButton() {
   }
 
   if (!promptCaptured) {
-    console.log('⏳ Waiting for beforeinstallprompt...');
     installBtn.style.display = 'flex';
     installBtn.innerHTML = `⏳ ${t('loadingDots')}`;
     installBtn.disabled = true;
@@ -294,7 +266,6 @@ function updateInstallButton() {
       if (deferredPrompt) {
         updateInstallButton();
       } else {
-        console.log('⚠️ Prompt not captured, showing manual option');
         installBtn.style.display = 'flex';
         installBtn.innerHTML = `📱 ${t('addToHome')}`;
         installBtn.disabled = false;
@@ -305,7 +276,6 @@ function updateInstallButton() {
     return;
   }
 
-  console.log('⚠️ Showing manual option');
   installBtn.style.display = 'flex';
   installBtn.innerHTML = `📱 ${t('addToHome')}`;
   installBtn.disabled = false;
@@ -329,15 +299,12 @@ async function loadCard(serial) {
       cache: 'no-store'
     });
     
-    if (!response.ok) {
-      throw new Error(t('cardNotFound'));
-    }
+    if (!response.ok) throw new Error(t('cardNotFound'));
     
     const data = await response.json();
-    console.log(`✅ [loadCard] Datos obtenidos:`, data);
+    console.log('✓ [loadCard] Datos obtenidos:', data);
     
     renderCard(data);
-    
   } catch (error) {
     console.error('❌ [loadCard] Error:', error);
     showError(error.message);
@@ -345,7 +312,7 @@ async function loadCard(serial) {
 }
 
 function renderCard(data) {
-  const { card, user, business, design, strips, urls } = data;
+  const { card, user, business, design, strips } = data;
 
   console.log(`🎨 [renderCard] Strips: ${strips.collected}/${strips.required}`);
 
@@ -407,13 +374,10 @@ function renderCard(data) {
     generateBarcode(barcodeType, card.serial_number);
     updateInstallButton();
     
-    if (isFromRegistration) {
-      console.log('🎯 User comes from registration, waiting for installation...');
-      if (isIOS && !isStandalone) {
-        setTimeout(() => {
-          document.getElementById('install-modal').classList.add('active');
-        }, 1000);
-      }
+    if (isFromRegistration && isIOS && !isStandalone) {
+      setTimeout(() => {
+        document.getElementById('install-modal').classList.add('active');
+      }, 1000);
     }
   }, 100);
 }
@@ -449,7 +413,6 @@ function generateBarcode(type, data) {
       colorLight: "#fff",
       correctLevel: QRCode.CorrectLevel.M
     });
-
     return;
   }
 
@@ -503,200 +466,221 @@ function generateStrips(collected, required, stripOnUrl, stripOffUrl) {
 function showError(message) {
   document.getElementById('app').innerHTML = `
     <div class="error">
-      <h2>⚠️ ${t('error')}</h2>
+      <h2>⚠ ${t('error')}</h2>
       <p>${message}</p>
       <button class="btn" onclick="location.reload()">${t('retry')}</button>
     </div>
   `;
 }
 
-window.installPWA = installPWA;
-window.closeInstallModal = closeInstallModal;
-
-// ===== PUSH NOTIFICATIONS =====
+// ===== PUSH NOTIFICATIONS CON FIREBASE =====
 async function setupPushNotifications(registration) {
   try {
-    console.log('[Push] 🔔 Configurando notificaciones...');
+    console.log('[Push] 🔔 Iniciando configuración con Firebase...');
     
     if (!('Notification' in window)) {
-      console.warn('[Push] ❌ Notificaciones no soportadas');
+      console.warn('[Push] ❌ Notification API no disponible');
       return;
     }
 
-    if (!('PushManager' in window)) {
-      console.warn('[Push] ❌ Push API no soportado');
+    if (isIOS) {
+      console.log('[Push] ℹ️ iOS Safari no soporta Web Push');
       return;
     }
 
-    console.log('[Push] ✅ APIs soportadas');
-    console.log('[Push] Estado permiso:', Notification.permission);
+    const isCurrentlyStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                                  window.navigator.standalone === true;
+
+    console.log('[Push] 🔍 Modo standalone:', isCurrentlyStandalone);
+
+    if (!isCurrentlyStandalone) {
+      console.log('[Push] ℹ️ Esperando modo standalone');
+      return;
+    }
+
+    // Inicializar Firebase (usa el SW ya registrado)
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    const messaging = firebase.messaging();
+
+    console.log('[Push] Permiso actual:', Notification.permission);
 
     if (Notification.permission === 'granted') {
-      console.log('[Push] ✅ Permiso ya otorgado');
-      await subscribeToPush(registration);
+      console.log('[Push] ✅ Permiso ya otorgado, obteniendo token...');
+      await getFirebaseToken(messaging);
       return;
     }
 
     if (Notification.permission === 'denied') {
-      console.warn('[Push] ❌ Permiso denegado por usuario');
+      console.warn('[Push] ❌ Permiso denegado');
       return;
     }
 
-    if (!isIOS) {
-      console.log('[Push] 📱 Pidiendo permiso...');
+    console.log('[Push] 📱 Pidiendo permiso...');
+    setTimeout(async () => {
+      const permission = await Notification.requestPermission();
+      console.log('[Push] Respuesta:', permission);
       
-      setTimeout(async () => {
-        try {
-          const permission = await Notification.requestPermission();
-          console.log('[Push] Respuesta usuario:', permission);
-          
-          if (permission === 'granted') {
-            console.log('[Push] ✅ Permiso otorgado, suscribiendo...');
-            await subscribeToPush(registration);
-          } else {
-            console.log('[Push] ⚠️ Permiso denegado');
-          }
-        } catch (err) {
-          console.error('[Push] Error pidiendo permiso:', err);
-        }
-      }, 2000);
-    } else {
-      console.log('[Push] ℹ️ iOS no soporta Web Push');
-    }
+      if (permission === 'granted') {
+        await getFirebaseToken(messaging);
+      }
+    }, 2000);
 
   } catch (error) {
-    console.error('[Push] ❌ Error configurando notificaciones:', error);
+    console.error('[Push] ❌ Error en setupPushNotifications:', error);
   }
 }
 
-async function subscribeToPush(registration) {
+async function getFirebaseToken(messaging) {
   try {
-    console.log('[Push] 🔑 Obteniendo VAPID key...');
-    
-    const response = await fetch('/api/v1/notifications/vapid-public-key');
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-    }
-    
-    const data = await response.json();
-    const vapidPublicKey = data.publicKey;
-    
-    if (!vapidPublicKey) {
-      throw new Error('VAPID key no disponible en respuesta');
-    }
+    console.log('[Push] 🔑 Obteniendo token de Firebase...');
 
-    console.log('[Push] ✅ VAPID key obtenida:', vapidPublicKey.substring(0, 20) + '...');
-    
-    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-    
-    let subscription = await registration.pushManager.getSubscription();
-    
-    if (subscription) {
-      console.log('[Push] ℹ️ Ya existe subscripción');
-    } else {
-      console.log('[Push] 📝 Creando nueva subscripción...');
-    }
-    
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey
+    const token = await messaging.getToken({
+      vapidKey: 'BMaVX5UENLzwkd1zSrkSXiMRD0OKoZTN7M3zX2NmQT2BEdnMh-ivraZXvwNwCqyE9PjGUIJlEJ8-kA4ocl-M2Ig'
     });
 
-    console.log('[Push] ✅ Subscription obtenida');
-    console.log('[Push] Endpoint:', subscription.endpoint.substring(0, 50) + '...');
-
-    await saveSubscription(subscription);
+    if (token) {
+      console.log('[Push] ✅ Token obtenido:', token.substring(0, 50) + '...');
+      await saveFirebaseToken(token);
+    } else {
+      console.error('[Push] ❌ No se pudo obtener token');
+    }
 
   } catch (error) {
-    console.error('[Push] ❌ Error suscribiéndose:', error);
-    console.error('[Push] Detalles:', {
-      message: error.message,
-      stack: error.stack
-    });
+    console.error('[Push] ❌ Error obteniendo token:', error);
+    
+    // ✅ Detectar si es Chrome Desktop con el bug conocido
+    const isDesktop = !/Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+    
+    if (error.name === 'AbortError' && isDesktop) {
+      console.warn('[Push] ⚠️ Chrome Desktop tiene problemas conocidos con FCM');
+      console.warn('[Push] 💡 Notificaciones funcionarán mejor en:');
+      console.warn('[Push]   - Chrome Android');
+      console.warn('[Push]   - Edge');
+      console.warn('[Push]   - Brave');
+      
+      // Mostrar mensaje al usuario
+      showPushWarning();
+    }
   }
 }
 
-async function saveSubscription(subscription) {
+function showPushWarning() {
+  // Solo mostrar una vez
+  if (localStorage.getItem('push-warning-shown')) return;
+  
+  setTimeout(() => {
+    const lang = currentLang || 'es';
+    const message = lang === 'es' 
+      ? '⚠️ Las notificaciones push no están disponibles en Chrome Desktop.\n\n' +
+        '✅ Para recibir notificaciones:\n' +
+        '• Usa la app en tu celular Android\n' +
+        '• O espera futuras actualizaciones de Chrome'
+      : '⚠️ Push notifications are not available on Chrome Desktop.\n\n' +
+        '✅ To receive notifications:\n' +
+        '• Use the app on your Android phone\n' +
+        '• Or wait for future Chrome updates';
+    
+    alert(message);
+    localStorage.setItem('push-warning-shown', 'true');
+  }, 3000);
+}
+
+async function saveFirebaseToken(token) {
   try {
-    console.log('[Push] 👤 Obteniendo userId...');
+    console.log('[Push] 💾 Guardando token...');
+    console.log('[Push] Serial actual: ', serial); 
+
+    if (!serial){
+      throw new Error('Serial no disponible'); 
+    }
     
     const userId = await getUserIdBySerial(serial);
     
     if (!userId) {
-      console.error('[Push] ❌ No se pudo obtener userId');
-      console.error('[Push] Serial actual:', serial);
-      return;
+      throw new Error('No se pudo obtener userId');
     }
-
-    console.log('[Push] ✅ userId obtenido:', userId);
-    console.log('[Push] 💾 Guardando subscription en backend...');
-
+    
+    console.log('[Push] userId:', userId);
+    
+    // Estructura compatible con backend
+    const subscription = {
+      endpoint: `https://fcm.googleapis.com/fcm/send/${token}`,
+      keys: {
+        p256dh: 'firebase',
+        auth: 'firebase'
+      }
+    };
+    
     const payload = {
       userId: userId,
       subscription: subscription
     };
-
-    console.log('[Push] Payload:', {
-      userId,
-      endpoint: subscription.endpoint.substring(0, 50) + '...'
-    });
-
-    const response = await fetch('/api/v1/notifications/subscribe', {
+    
+    console.log('[Push] 📤 Enviando al backend...');
+    
+    const saveResponse = await fetch('/api/v1/notifications/subscribe', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log('[Push] ✅ Subscription guardada exitosamente:', data);
-    } else {
-      const error = await response.text();
-      console.error('[Push] ❌ Error guardando subscription:');
-      console.error('[Push] Status:', response.status);
-      console.error('[Push] Error:', error);
+    
+    if (!saveResponse.ok) {
+      const errorText = await saveResponse.text();
+      throw new Error('Error del servidor: ' + errorText);
     }
+    
+    const result = await saveResponse.json();
+    console.log('[Push] ✅ Guardado exitosamente:', result);
+    console.log('[Push] 🎉 Subscripción completada con Firebase!');
 
   } catch (error) {
-    console.error('[Push] ❌ Error en saveSubscription:', error);
-    console.error('[Push] Stack:', error.stack);
+    console.error('[Push] ❌ Error guardando token:', error);
   }
 }
 
 async function getUserIdBySerial(serial) {
   try {
+    console.log('[Push] 🔍 Obteniendo userId para serial:', serial);
+    console.log('[Push] Serial length: ', serial?.length); 
+    console.log('[Push] Serial type: ', typeof serial); 
+
+    if (!serial){
+      console.error('[Push] Serial está vacío o undefined'); 
+      return null; 
+    }
+    
     const response = await fetch(`/api/wallet/${serial}`);
     
     if (!response.ok) {
+      console.error('[Push] ❌ Error en fetch:', response.status);
       return null;
     }
     
     const data = await response.json();
-    return data.user?.id || data.userId || null;
+    console.log('[Push] 📦 Data completa:', data);
+    console.log('[Push] 📦 data.user:', data.user);
+    
+    const userId = data.user?.id || data.userId || null;
+    
+    console.log('[Push] 🆔 userId encontrado:', userId);
+    
+    if (!userId) {
+      console.error('[Push] ❌ No se encontró userId en la respuesta');
+    }
+    
+    return userId;
     
   } catch (error) {
-    console.error('[Push] Error obteniendo userId:', error);
+    console.error('[Push] ❌ Error obteniendo userId:', error);
     return null;
   }
 }
 
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding)
-    .replace(/\-/g, '+')
-    .replace(/_/g, '/');
+// Exponer funciones globales
+window.installPWA = installPWA;
+window.closeInstallModal = closeInstallModal;
 
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  
-  return outputArray;
-}
-
-console.log('✅ wallet.js loaded with push notifications and auto-update');
+console.log('✓ wallet.js loaded with Firebase push notifications');

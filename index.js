@@ -6,7 +6,6 @@ const morgan = require('morgan');
 const app = express();
 const path = require('path');   
 const webpush = require('web-push');
-const router = express.Router();
 
 app.use((req, res, next) => {
   res.setHeader('Vary', 'Origin'); 
@@ -44,7 +43,10 @@ app.use(cors({
     'http://localhost:8100',
     'https://loyalty.windoe.mx',
     'http://loyalty.windoe.mx',
-    'https://loyalty-6a5be.web.app'
+    'https://loyalty-6a5be.web.app',
+    'https://wallet-app-backend.fly.dev', 
+    'https://windoe.io',                   
+    'http://windoe.io'  
   ].includes(origin)),
   credentials: true
 }));
@@ -67,13 +69,6 @@ app.listen(PORT, '0.0.0.0', () => {
   }
 });
 
-// GET /api/v1/notifications/vapid-public-key
-router.get('/vapid-public-key', (req, res) => {
-  res.json({
-    publicKey: process.env.VAPID_PUBLIC_KEY
-  });
-});
-
 // ===== ARCHIVOS ESTÁTICOS =====
 app.use('/public', express.static(path.join(__dirname, 'public'), {
   maxAge: '7d', 
@@ -89,6 +84,7 @@ app.use('/public', express.static(path.join(__dirname, 'public'), {
 
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));           // Uploads (alias de public/uploads)
 app.use('/service-worker.js', express.static(path.join(__dirname, 'service-worker.js'))); // Service Worker (debe estar en la raíz del dominio)
+app.use('/firebase-messaging-sw.js', express.static(path.join(__dirname, 'firebase-messaging-sw.js')));
 
 // Routing
 const v1Business = require('./src/v1/routes/businessRoutes');

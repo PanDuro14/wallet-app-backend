@@ -62,6 +62,9 @@ router.post('/subscribe', notificationController.subscribe);
  * Elimina subscripciones de un usuario
  */
 router.delete('/unsubscribe', notificationController.unsubscribe);
-
-
+/**
+ * GET /api/v1/notifications/test-vapid
+ * Valida configuración de VAPID keys
+ */
+router.get('/test-vapid', notificationController.testVapid);
 module.exports = router;

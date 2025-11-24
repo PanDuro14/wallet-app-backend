@@ -87,7 +87,7 @@ const updateCardDetails = async(req, res) => {
             res.status(404).json({ error: 'Tarjeta no encontrada' });
         }
     } catch (error) {
-        console.error(error);
+        //console.error(error);
         res.status(502).json({ error: 'Error al actualizar el detalle de la tarjeta' });
     }
 }
@@ -101,7 +101,7 @@ const deleteCardDetails = async(req, res) => {
         }
         res.status(200).json({ message: 'Tarjeta eliminada con éxito' });
     } catch (error) {
-        console.error(error);
+        //console.error(error);
         res.status(502).json({ error: 'Error al eliminar el detalle de la tarjeta' });
     }
 }
@@ -119,7 +119,7 @@ const getAllCardsByBusiness = async(req, res) => {
         }
         res.status(200).json(result); 
     } catch (error){
-        console.error(error); 
+        //console.error(error); 
         res.status(502).json({ error: 'Error al obtener las tarjeas'}); 
     }
 }
@@ -141,7 +141,7 @@ const getOneCardByBusiness = async(req, res) => {
         }
         res.status(200).json(result); 
     } catch (error){
-        console.error(error); 
+        //console.error(error); 
         res.status(502).json({ error: 'Error al obtener la tarjea'}); 
     }
 }
@@ -188,13 +188,13 @@ const createDesignUnified = async (req, res) => {
       body.strips.layout = body.strips.layout || 'horizontal';
       body.strips.rewardDescription = body.strips.rewardDescription || '';
       
-      console.log('[createDesignUnified] Configuración de strips validada:', {
-        total: body.strips.total,
-        rewardTitle: body.strips.rewardTitle,
-        layout: body.strips.layout,
-        hasOnImage: !!body.strips.stripImageOn,
-        hasOffImage: !!body.strips.stripImageOff
-      });
+      //console.log('[createDesignUnified] Configuración de strips validada:', {
+      //  total: body.strips.total,
+      //  rewardTitle: body.strips.rewardTitle,
+      //  layout: body.strips.layout,
+      //  hasOnImage: !!body.strips.stripImageOn,
+      //  hasOffImage: !!body.strips.stripImageOff
+      //});
     }
 
     // normaliza barcode para guardar limpio (tu código original)
@@ -218,7 +218,7 @@ const createDesignUnified = async (req, res) => {
       } : {})
     });
   } catch (e) {
-    console.error('createDesignUnified', e);
+    //console.error('createDesignUnified', e);
     return res.status(400).json({ error: e.message || 'Invalid design body' });
   }
 };
@@ -237,7 +237,7 @@ const updateDesignUnified = async (req, res) => {
     if (!updated) return res.status(404).json({ error: 'No encontrado' });
     return res.json({ ok: true, id, design: updated.design_json });
   } catch (e) {
-    console.error('updateDesignUnified', e);
+    //console.error('updateDesignUnified', e);
     return res.status(400).json({ error: e.message || 'Invalid update' });
   }
 };
@@ -249,7 +249,7 @@ const deleteByIdBusiness = async (req, res) => {
         const response = await carddetailProcess.deleteByIdBusiness(id); 
         res.status(200).json(response); 
     } catch (error){
-        console.error('Error al intentar eliminar tarjetas'); 
+        //console.error('Error al intentar eliminar tarjetas'); 
         return res.status(502).json({ error: error.message || 'No se pudieron eliminar las tarjetas '}); 
     }
 }
@@ -275,7 +275,7 @@ const updateMeta = async (req, res) => {
 
     return res.status(200).json({ ok: true, id, pass_type_id: updated.pass_type_id, terms: updated.terms });
   } catch (e) {
-    console.error('updateMeta error', e);
+    //console.error('updateMeta error', e);
     return res.status(502).json({ error: 'Error al actualizar meta' });
   }
 };
@@ -300,12 +300,12 @@ const createDesignWithStripsImages = async (req, res) => {
     const stripImageOnBuffer = req.files['strip_image_on']?.[0]?.buffer;
     const stripImageOffBuffer = req.files['strip_image_off']?.[0]?.buffer;
 
-    console.log('[createDesignWithStripsImages] Imágenes recibidas:', {
-      strip_on: !!stripImageOnBuffer,
-      strip_off: !!stripImageOffBuffer,
-      strip_on_size: stripImageOnBuffer?.length || 0,
-      strip_off_size: stripImageOffBuffer?.length || 0
-    });
+    //console.log('[createDesignWithStripsImages] Imágenes recibidas:', {
+    //  strip_on: !!stripImageOnBuffer,
+    //  strip_off: !!stripImageOffBuffer,
+    //  strip_on_size: stripImageOnBuffer?.length || 0,
+    //  strip_off_size: stripImageOffBuffer?.length || 0
+    //});
 
     // Inicializar configuración de strips si no existe
     if (!designData.strips) {
@@ -317,9 +317,9 @@ const createDesignWithStripsImages = async (req, res) => {
       try {
         const base64On = stripImageOnBuffer.toString('base64');
         designData.strips.stripImageOn = `data:image/png;base64,${base64On}`;
-        console.log('[createDesignWithStripsImages] Imagen ON convertida:', base64On.length, 'chars');
+        //console.log('[createDesignWithStripsImages] Imagen ON convertida:', base64On.length, 'chars');
       } catch (convertError) {
-        console.error('Error convirtiendo imagen ON:', convertError);
+        //console.error('Error convirtiendo imagen ON:', convertError);
         return res.status(400).json({ error: 'Error procesando strip_image_on' });
       }
     }
@@ -328,9 +328,9 @@ const createDesignWithStripsImages = async (req, res) => {
       try {
         const base64Off = stripImageOffBuffer.toString('base64');
         designData.strips.stripImageOff = `data:image/png;base64,${base64Off}`;
-        console.log('[createDesignWithStripsImages] Imagen OFF convertida:', base64Off.length, 'chars');
+        //console.log('[createDesignWithStripsImages] Imagen OFF convertida:', base64Off.length, 'chars');
       } catch (convertError) {
-        console.error('Error convirtiendo imagen OFF:', convertError);
+        //console.error('Error convirtiendo imagen OFF:', convertError);
         return res.status(400).json({ error: 'Error procesando strip_image_off' });
       }
     }
@@ -371,7 +371,7 @@ const createDesignWithStripsImages = async (req, res) => {
     });
 
   } catch (e) {
-    console.error('createDesignWithStripsImages error:', e);
+    //console.error('createDesignWithStripsImages error:', e);
     return res.status(500).json({ error: 'Error al crear diseño con imágenes de strips' });
   }
 };

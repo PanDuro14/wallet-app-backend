@@ -17,7 +17,7 @@ if (p8b64) {
     fs.mkdirSync(path.dirname(p8Path), { recursive: true });
     const pem = Buffer.from(p8b64, 'base64').toString('utf8');
     fs.writeFileSync(p8Path, pem, { mode: 0o600 });          // permisos seguros
-    console.log('[APNs] apns_key.p8 reconstruido en', p8Path);
+    //console.log('[APNs] apns_key.p8 reconstruido en', p8Path);
   } catch (e) {
     console.error('[APNs] Error al escribir apns_key.p8:', e.message);
   }

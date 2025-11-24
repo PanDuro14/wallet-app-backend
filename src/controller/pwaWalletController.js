@@ -30,12 +30,12 @@ const getCard = async (req, res) => {
     
     const cardData = await pwaWalletProcess.getCardDetails(serial);
     
-    console.log(`[getCard] Serial: ${serial}, Strips: ${cardData.strips?.collected}/${cardData.strips?.required}`);
+    //console.log(`[getCard] Serial: ${serial}, Strips: ${cardData.strips?.collected}/${cardData.strips?.required}`);
     
     res.json(cardData);
     
   } catch (error) {
-    console.error('[PWA Wallet Controller] Error en getCard:', error);
+    //console.error('[PWA Wallet Controller] Error en getCard:', error);
     
     const statusCode = error.statusCode || 500;
     
@@ -63,8 +63,6 @@ const addStampAdmin = async (req, res) => {
         error: 'Serial es requerido'
       });
     }
-
-    console.log(`[Add Stamp Admin] Serial: ${serial}, Strip: ${stripNumber}`);
 
     const card = await pwaWalletDb.getUserBySerial(serial);
 
@@ -98,37 +96,34 @@ const addStampAdmin = async (req, res) => {
     const newStripsCollected = currentStrips + 1;
     const isComplete = newStripsCollected >= requiredStrips;
 
-    // Actualizar en BD
     const updated = await pwaWalletDb.updateUserStrips(
       card.id,
       newStripsCollected,
       isComplete
     );
 
-    console.log(`✅ [Add Stamp Admin] Strip agregado: ${newStripsCollected}/${requiredStrips}`);
-
-    // Enviar notificación
+    // ✅ Enviar notificación con businessId
     try {
       if (isComplete) {
         await notificationService.sendCompletionNotification(
           serial,
           card.id,
           'strips',
+          card.business_id, // ← AGREGAR businessId
           card.lang || 'es'
         );
-        console.log(`✅ [addStampAdmin] Notificación COMPLETACIÓN enviada`);
       } else {
         await notificationService.sendStripsUpdateNotification(
           serial,
           card.id,
           newStripsCollected,
           requiredStrips,
+          card.business_id, // ← AGREGAR businessId
           card.lang || 'es'
         );
-        console.log(`✅ [addStampAdmin] Notificación PROGRESO: ${newStripsCollected}/${requiredStrips}`);
       }
     } catch (notifError) {
-      console.error(`❌ [addStampAdmin] Error notificación:`, notifError.message);
+      console.error('[addStampAdmin] Error notificación:', notifError.message);
     }
 
     return res.json({
@@ -171,8 +166,6 @@ const updatePoints = async (req, res) => {
       });
     }
 
-    console.log(`[Update Points Admin] Serial: ${serial}, Delta: ${delta}`);
-
     const cardData = await pwaWalletDb.getUserBySerial(serial);
     
     if (!cardData) {
@@ -202,13 +195,17 @@ const updatePoints = async (req, res) => {
       });
     }
 
+    // ✅ Enviar notificación con businessId
     try {
       await notificationService.sendPointsUpdateNotification(
-        serial, cardData.id, newPoints, cardData.lang || 'es'
+        serial, 
+        cardData.id, 
+        newPoints, 
+        cardData.business_id, // ← AGREGAR businessId
+        cardData.lang || 'es'
       );
-      console.log(`✅ [updatePoints] Notificación enviada`);
     } catch (notifError) {
-      console.error('❌ [updatePoints] Error notificación:', notifError.message);
+      console.error('[updatePoints] Error notificación:', notifError.message);
     }
 
     return res.json({
@@ -245,7 +242,7 @@ const resetStrips = async (req, res) => {
       });
     }
 
-    console.log(`[Reset Strips Admin] Serial: ${serial}, Redeemed: ${redeemed}`);
+    //console.log(`[Reset Strips Admin] Serial: ${serial}, Redeemed: ${redeemed}`);
 
     const cardData = await pwaWalletDb.getUserBySerial(serial);
     
@@ -279,7 +276,7 @@ const resetStrips = async (req, res) => {
       });
     }
 
-    console.log(`✅ [Reset Strips] Serial ${serial} reseteado`);
+    //console.log(` [Reset Strips] Serial ${serial} reseteado`);
 
     return res.json({
       ok: true,
@@ -290,7 +287,7 @@ const resetStrips = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[Reset Strips Admin] Error:', error);
+    //console.error('[Reset Strips Admin] Error:', error);
     return res.status(500).json({
       ok: false,
       error: 'Error interno del servidor',
@@ -328,7 +325,7 @@ const addStamp = async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('[PWA Wallet Controller] Error en addStamp:', error);
+    //console.error('[PWA Wallet Controller] Error en addStamp:', error);
     
     const statusCode = error.statusCode || 500;
     
@@ -371,7 +368,7 @@ const redeemReward = async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('[PWA Wallet Controller] Error en redeemReward:', error);
+    //console.error('[PWA Wallet Controller] Error en redeemReward:', error);
     
     const statusCode = error.statusCode || 500;
     
@@ -412,7 +409,7 @@ const getCardStats = async (req, res) => {
     res.json(stats);
     
   } catch (error) {
-    console.error('[PWA Wallet Controller] Error en getCardStats:', error);
+    //console.error('[PWA Wallet Controller] Error en getCardStats:', error);
     
     res.status(500).json({
       error: error.message,
@@ -442,7 +439,7 @@ const checkBusinessAssets = async (req, res) => {
     res.json(assets);
     
   } catch (error) {
-    console.error('[PWA Wallet Controller] Error en checkBusinessAssets:', error);
+    //console.error('[PWA Wallet Controller] Error en checkBusinessAssets:', error);
     
     res.status(500).json({
       error: error.message,
@@ -514,7 +511,7 @@ const verifyBusinessPin = async (req, res, next) => {
     next();
 
   } catch (error) {
-    console.error('[verifyBusinessPin] Error:', error);
+    //console.error('[verifyBusinessPin] Error:', error);
     res.status(500).json({ 
       error: 'Error verificando PIN',
       detail: error.message 
@@ -526,7 +523,7 @@ const verifyBusinessPin = async (req, res, next) => {
  * Middleware: manejo global de errores
  */
 const errorHandler = (err, req, res, next) => {
-  console.error('[PWA Wallet Controller] Error no capturado:', err);
+  //console.error('[PWA Wallet Controller] Error no capturado:', err);
   
   const statusCode = err.statusCode || 500;
   

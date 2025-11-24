@@ -19,13 +19,13 @@ async function toPNG(buffer) {
   if (!buffer) return null;
   if (isPNG(buffer)) return buffer;
   if (!sharp) {
-    console.warn('[Apple] Logo no es PNG y "sharp" no está instalado: se intentará igual (puede que Apple lo ignore).');
+    //console.warn('[Apple] Logo no es PNG y "sharp" no está instalado: se intentará igual (puede que Apple lo ignore).');
     return buffer;
   }
   return await sharp(buffer).png().toBuffer();
 }
 
-// acondiciona los tamaños para las
+// acondiciona los tamaños para los logos
 async function writeLogoSet(modelDir, buffer) {
   if (!buffer) return;
   const png = await toPNG(buffer);
@@ -71,9 +71,9 @@ async function buildTempModel(baseDir, assets = {}) {
   if (assets.strip) await writeStrip(modelDir, assets.strip);
   if (!assets.strip && assets.logo) await writeStrip(modelDir, assets.logo); // plan B
 
-  console.log('[Apple Model] wrote', {
-    modelDir, wroteLogo: !!assets.logo, wroteStrip: !!assets.strip || !!assets.logo
-  });
+  //console.log('[Apple Model] wrote', {
+  //  modelDir, wroteLogo: !!assets.logo, wroteStrip: !!assets.strip || !!assets.logo
+  //});
   return modelDir;
 }
 
@@ -170,9 +170,9 @@ function buildFieldsByVariant({
       const progress = `${strips_collected}/${strips_required}`;
       const displayValue = isComplete ? 'COMPLETADA' : progress;
       
-      console.log('[buildFieldsByVariant] Generando campos para strips:', {
-        strips_collected, strips_required, isComplete, displayValue
-      });
+      //console.log('[buildFieldsByVariant] Generando campos para strips:', {
+      //  strips_collected, strips_required, isComplete, displayValue
+      //});
       
       return {
         primaryFields: [{ 
@@ -183,7 +183,7 @@ function buildFieldsByVariant({
         }],
         secondaryFields: userName ? [{ 
           key: 'member', 
-          label: 'MIEMBRO', 
+          label: ' ', 
           value: userName 
         }] : [],
         auxiliaryFields: [],
@@ -257,12 +257,12 @@ async function createPkPassBuffer({
   const normalizedVariant = (variant || '').toLowerCase().trim();
   
   // Log para debug
-  console.log('[createPkPassBuffer] Variant validation:', {
-    original: variant,
-    normalized: normalizedVariant,
-    isStrips: normalizedVariant === 'strips',
-    isPoints: normalizedVariant === 'points'
-  });
+  //console.log('[createPkPassBuffer] Variant validation:', {
+  //  original: variant,
+  //  normalized: normalizedVariant,
+  //  isStrips: normalizedVariant === 'strips',
+  //  isPoints: normalizedVariant === 'points'
+  //});
 
   // CORRECCIÓN: Validación más flexible - permitir ambas variantes o valor vacío
   if (normalizedVariant && normalizedVariant !== 'strips' && normalizedVariant !== 'points') {
@@ -272,13 +272,13 @@ async function createPkPassBuffer({
   // Si no se especifica variante, asumir 'points' como default
   const finalVariant = normalizedVariant || 'points';
 
-  console.log('[createPkPassBuffer] Parámetros recibidos:', {
-    variant: finalVariant, 
-    strips_collected, 
-    strips_required, 
-    reward_title, 
-    isComplete
-  });
+  //console.log('[createPkPassBuffer] Parámetros recibidos:', {
+  //  variant: finalVariant, 
+  //  strips_collected, 
+  //  strips_required, 
+  //  reward_title, 
+  //  isComplete
+  //});
 
   // 1) Cargar y validar certs
   const CERTS_DIR = process.env.PASS_CERTS_DIR || path.join(process.cwd(), 'certs');
@@ -303,12 +303,12 @@ async function createPkPassBuffer({
   const wantStrip = finalVariant === DesignVariants.STRIPS;
   if (!wantStrip) assets = { ...assets, strip: null };   // si es points, fuerza remover strip
 
-  console.log('[createPkPassBuffer] Assets a usar:', {
-    variant: finalVariant, 
-    wantStrip, 
-    hasStripAsset: !!assets.strip, 
-    hasLogo: !!assets.logo
-  });
+  //console.log('[createPkPassBuffer] Assets a usar:', {
+  //  variant: finalVariant, 
+  //  wantStrip, 
+  //  hasStripAsset: !!assets.strip, 
+  //  hasLogo: !!assets.logo
+  //});
 
   const modelDir = await buildTempModel(PASS_MODEL_DIR, assets);
   function rmIfExists(p) { try { fs.unlinkSync(p); } catch {} }
@@ -360,13 +360,13 @@ async function createPkPassBuffer({
   }
 
   // === CAMPOS por variante ===
-  console.log('[createPkPassBuffer] Llamando buildFieldsByVariant con:', {
-    variant: wantStrip ? 'strips' : 'points',
-    strips_collected,
-    strips_required,
-    reward_title,
-    isComplete
-  });
+  //console.log('[createPkPassBuffer] Llamando buildFieldsByVariant con:', {
+  //  variant: wantStrip ? 'strips' : 'points',
+  //  strips_collected,
+  //  strips_required,
+  //  reward_title,
+  //  isComplete
+  //});
 
   const { primaryFields, secondaryFields, auxiliaryFields, backFields } = buildFieldsByVariant({
      variant: wantStrip ? 'strips' : 'points',
@@ -380,11 +380,11 @@ async function createPkPassBuffer({
     isComplete
   });
 
-  console.log('[createPkPassBuffer] Fields generados:', {
-    primary: primaryFields?.length || 0,
-    secondary: secondaryFields?.length || 0,
-    primaryContent: primaryFields?.[0]
-  });
+  //console.log('[createPkPassBuffer] Fields generados:', {
+  //  primary: primaryFields?.length || 0,
+  //  secondary: secondaryFields?.length || 0,
+  //  primaryContent: primaryFields?.[0]
+  //});
 
   const hideName = !programName || String(programName).trim() === '';
   const payload = {

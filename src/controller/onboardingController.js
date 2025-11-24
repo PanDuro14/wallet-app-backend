@@ -76,13 +76,13 @@ const createUserAndIssue = async (req, res) => {
       });
     }
 
-    console.log('[createUserAndIssue] Request:', {
-      business_id,
-      email,
-      variant: finalVariant,
-      points: finalVariant === 'points' ? points : undefined,
-      stripsRequired: finalVariant === 'strips' ? stripsRequired : undefined
-    });
+    //console.log('[createUserAndIssue] Request:', {
+    //  business_id,
+    //  email,
+    //  variant: finalVariant,
+    //  points: finalVariant === 'points' ? points : undefined,
+    //  stripsRequired: finalVariant === 'strips' ? stripsRequired : undefined
+    //});
 
     // Procesar archivos de strips (multer)
     const strip_on  = req.files?.strip_on?.[0]?.buffer || null;
@@ -121,16 +121,16 @@ const createUserAndIssue = async (req, res) => {
       strip_buffers: { on: strip_on, off: strip_off }
     });
 
-    console.log('[createUserAndIssue] Success:', {
-      userId: result.user.id,
-      cardType: result.user.card_type,
-      hasGoogleUrl: !!result.wallet.google_save_url,
-      hasAppleUrl: !!result.wallet.apple_pkpass_url
-    });
+    //console.log('[createUserAndIssue] Success:', {
+    //  userId: result.user.id,
+    //  cardType: result.user.card_type,
+    //  hasGoogleUrl: !!result.wallet.google_save_url,
+    //  hasAppleUrl: !!result.wallet.apple_pkpass_url
+    //});
 
     return res.status(201).json(result);
   } catch (err) {
-    console.error('[createUserAndIssue] Error:', err);
+    //console.error('[createUserAndIssue] Error:', err);
     return res.status(err.statusCode || 500).json({ 
       error: err.message || 'Server error' 
     });
@@ -178,12 +178,12 @@ const createUserAndIssueStrips = async (req, res) => {
       });
     }
 
-    console.log('[createUserAndIssueStrips] Request:', {
-      business_id,
-      email,
-      stripsRequired,
-      rewardTitle
-    });
+    //console.log('[createUserAndIssueStrips] Request:', {
+    //  business_id,
+    //  email,
+    //  stripsRequired,
+    //  rewardTitle
+    //});
 
     // Llamar al proceso con parámetros de strips
     const result = await createUserAndIssueProcess({
@@ -201,15 +201,15 @@ const createUserAndIssueStrips = async (req, res) => {
       barcode
     });
 
-    console.log('[createUserAndIssueStrips] Success:', {
-      userId: result.user.id,
-      strips_required: result.user.strips_required,
-      reward_title: result.user.reward_title
-    });
+    //console.log('[createUserAndIssueStrips] Success:', {
+    //  userId: result.user.id,
+    //  strips_required: result.user.strips_required,
+    //  reward_title: result.user.reward_title
+    //});
 
     return res.status(201).json(result);
   } catch (err) {
-    console.error('[createUserAndIssueStrips] Error:', err);
+    //console.error('[createUserAndIssueStrips] Error:', err);
     return res.status(err.statusCode || 500).json({ 
       error: err.message || 'Server error' 
     });
@@ -250,12 +250,12 @@ const createUserAndIssuePoints = async (req, res) => {
       });
     }
 
-    console.log('[createUserAndIssuePoints] Request:', {
-      business_id,
-      email,
-      points,
-      tier
-    });
+    //console.log('[createUserAndIssuePoints] Request:', {
+    //  business_id,
+    //  email,
+    //  points,
+    //  tier
+    //});
 
     // Llamar al proceso con parámetros de points
     const result = await createUserAndIssueProcess({
@@ -273,15 +273,15 @@ const createUserAndIssuePoints = async (req, res) => {
       barcode
     });
 
-    console.log('[createUserAndIssuePoints] Success:', {
-      userId: result.user.id,
-      points: result.user.points,
-      tier: result.user.tier
-    });
+    //console.log('[createUserAndIssuePoints] Success:', {
+    //  userId: result.user.id,
+    //  points: result.user.points,
+    //  tier: result.user.tier
+    //});
 
     return res.status(201).json(result);
   } catch (err) {
-    console.error('[createUserAndIssuePoints] Error:', err);
+    //console.error('[createUserAndIssuePoints] Error:', err);
     return res.status(err.statusCode || 500).json({ 
       error: err.message || 'Server error' 
     });
@@ -304,27 +304,27 @@ const changeUserDesign = async (req, res) => {
       });
     }
 
-    console.log('[changeUserDesign] Request:', {
-      userId,
-      card_detail_id
-    });
+    //console.log('[changeUserDesign] Request:', {
+    //  userId,
+    //  card_detail_id
+    //});
 
     await changeUserDesignProcess({
       user_id: Number(userId),
       card_detail_id: Number(card_detail_id)
     });
 
-    console.log('[changeUserDesign] Success:', {
-      userId,
-      newDesignId: card_detail_id
-    });
+    //console.log('[changeUserDesign] Success:', {
+    //  userId,
+    //  newDesignId: card_detail_id
+    //});
 
     return res.json({ 
       ok: true,
       message: 'Diseño actualizado exitosamente'
     });
   } catch (err) {
-    console.error('[changeUserDesign] Error:', err);
+    //console.error('[changeUserDesign] Error:', err);
     return res.status(err.statusCode || 500).json({ 
       error: err.message || 'Server error' 
     });
@@ -353,8 +353,6 @@ POST /api/onboarding/create
   "points": 100,
   "variant": "points"
 }
-
-✅ Sigue funcionando exactamente igual
 
 ═══════════════════════════════════════════════════════════════════════
 NUEVO - TARJETA DE STRIPS

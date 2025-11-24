@@ -10,7 +10,7 @@ const getBusinessLogo = async (req, res) => {
   try {
     const { businessId } = req.params;
     
-    console.log('[getBusinessLogo] Solicitado logo para businessId:', businessId);
+    //console.log('[getBusinessLogo] Solicitado logo para businessId:', businessId);
     
     // Obtener datos desde BD
     const cdRes = await carddetailService.getOneCardByBusiness(businessId);
@@ -33,7 +33,7 @@ const getBusinessLogo = async (req, res) => {
     }
     
     if (!logoBuffer) {
-      console.warn('[getBusinessLogo] Logo no encontrado para businessId:', businessId);
+      ////console.warn('[getBusinessLogo] Logo no encontrado para businessId:', businessId);
       return res.status(404).json({ error: 'Logo no encontrado' });
     }
     
@@ -46,7 +46,7 @@ const getBusinessLogo = async (req, res) => {
     } else if (typeof logoBuffer === 'object' && logoBuffer.type === 'Buffer' && Array.isArray(logoBuffer.data)) {
       buffer = Buffer.from(logoBuffer.data);
     } else {
-      console.error('[getBusinessLogo] Formato de buffer no reconocido:', typeof logoBuffer);
+      //console.error('[getBusinessLogo] Formato de buffer no reconocido:', typeof logoBuffer);
       return res.status(500).json({ error: 'Formato de imagen inválido' });
     }
     
@@ -59,11 +59,11 @@ const getBusinessLogo = async (req, res) => {
     if (isJPEG) contentType = 'image/jpeg';
     else if (isWebP) contentType = 'image/webp';
     
-    console.log('[getBusinessLogo] ✓ Sirviendo logo:', {
-      businessId,
-      size: buffer.length,
-      type: contentType
-    });
+    //console.log('[getBusinessLogo] ✓ Sirviendo logo:', {
+    //  businessId,
+    //  size: buffer.length,
+    //  type: contentType
+    //});
     
     // Headers de cache para mejor performance
     res.set({
@@ -76,7 +76,7 @@ const getBusinessLogo = async (req, res) => {
     return res.send(buffer);
     
   } catch (error) {
-    console.error('[getBusinessLogo] Error:', error);
+    //console.error('[getBusinessLogo] Error:', error);
     return res.status(500).json({ 
       error: 'Error al obtener logo',
       details: error.message 

@@ -136,7 +136,7 @@ const getUserByData = async (req, res) => {
     res.status(200).json(users);
 
   } catch (error) {
-    console.error('Error en getUserByData:', error);
+    //console.error('Error en getUserByData:', error);
     res.status(500).json({ 
       error: 'Error al buscar usuarios',
       message: error.message 

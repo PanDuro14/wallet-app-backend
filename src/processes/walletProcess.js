@@ -98,7 +98,7 @@ async function loadBrandAssets(businessId) {
       try {
         designJson = JSON.parse(cd.design_json);
       } catch (e) {
-        console.warn('[Load Brand Assets] No se pudo parsear design_json:', e.message);
+        //console.warn('[Load Brand Assets] No se pudo parsear design_json:', e.message);
       }
     } else if (typeof cd.design_json === 'object') {
       designJson = cd.design_json;
@@ -123,27 +123,27 @@ async function loadBrandAssets(businessId) {
     (biz && (biz.foreground_color || biz.fg || biz.foregroundColor)) ||
     '#E6E6E6';
 
-  console.log('[Load Brand Assets] {', {
-    businessId,
-    isBizArray: Array.isArray(bizRes),
-    isCdArray: Array.isArray(cdRes),
-    hasLogo: !!logoBuffer,
-    logoLen: logoBuffer?.length || 0,
-    hasStripGeneric: !!stripBuffer,
-    hasStripOn: !!stripOnBuffer,
-    hasStripOff: !!stripOffBuffer,
-    stripOnLen: stripOnBuffer?.length || 0,
-    stripOffLen: stripOffBuffer?.length || 0,
-    stripGenericLen: stripBuffer?.length || 0,
-    colors: { bg, fg },
-    rawDesignJson: cd?.design_json, // ← Ver qué viene de BD
-    designJson: {
-      hasDesign: !!cd?.design_json,
-      programName: designJson.programName,
-      colors: designJson.colors,
-      disableStrip: designJson.assets?.disableStrip
-    }
-  });
+  //console.log('[Load Brand Assets] {', {
+  //  businessId,
+  //  isBizArray: Array.isArray(bizRes),
+  //  isCdArray: Array.isArray(cdRes),
+  //  hasLogo: !!logoBuffer,
+  //  logoLen: logoBuffer?.length || 0,
+  //  hasStripGeneric: !!stripBuffer,
+  //  hasStripOn: !!stripOnBuffer,
+  //  hasStripOff: !!stripOffBuffer,
+  //  stripOnLen: stripOnBuffer?.length || 0,
+  //  stripOffLen: stripOffBuffer?.length || 0,
+  //  stripGenericLen: stripBuffer?.length || 0,
+  //  colors: { bg, fg },
+  //  rawDesignJson: cd?.design_json, // ← Ver qué viene de BD
+  //  designJson: {
+  //    hasDesign: !!cd?.design_json,
+  //    programName: designJson.programName,
+  //    colors: designJson.colors,
+  //    disableStrip: designJson.assets?.disableStrip
+  //  }
+  //});
 
   return { 
     logoBuffer, 
@@ -182,7 +182,7 @@ async function issueAppleWalletPkpass(dto) {
     assets.stripOn = stripOnBuffer;
     assets.stripOff = stripOffBuffer;
   } else {
-    console.log('[Apple Wallet] Falta alguna de las imágenes de strip.');
+    //console.log('[Apple Wallet] Falta alguna de las imágenes de strip.');
   }
 
   const colors = dto.colors || { background: bg, foreground: fg };
@@ -221,12 +221,12 @@ function findPointsInFields(fields) {
 function sanityLog() {
   try {
     const s = getSA();
-    console.log('[Wallet sanity]', {
-      issuerId,
-      sa_email: s?.client_email,
-      project_id: s?.project_id,
-      origins
-    });
+    //console.log('[Wallet sanity]', {
+    //  issuerId,
+    //  sa_email: s?.client_email,
+    //  project_id: s?.project_id,
+    //  origins
+    //});
   } catch (e) {
     console.log('[Wallet sanity] No se pudo cargar SA:', e?.message || e);
   }
@@ -283,7 +283,7 @@ async function issueGoogleWalletLink({
   if (!logoUri) {
     const fb = process.env.GOOGLE_WALLET_FALLBACK_LOGO_HTTPS;
     if (fb && isHttps(fb)) {
-      console.warn('[Google Wallet] Usando fallback HTTPS para programLogo:', fb);
+      //console.warn('[Google Wallet] Usando fallback HTTPS para programLogo:', fb);
       logoUri = fb;
     } else {
       console.warn('[Google Wallet] No hay logo HTTPS; se intentará sin logo.');
@@ -354,25 +354,25 @@ async function createGoogleWalletObject({
 }) {
   sanityLog();
 
-  console.log('[createGoogleWalletObject] Parámetros recibidos:', {
-    cardCode,
-    businessId,
-    variant,
-    points,
-    strips_collected,
-    strips_required,
-    colors
-  });
+  //console.log('[createGoogleWalletObject] Parámetros recibidos:', {
+  //  cardCode,
+  //  businessId,
+  //  variant,
+  //  points,
+  //  strips_collected,
+  //  strips_required,
+  //  colors
+  //});
 
   // 1) Cargar branding desde BD
   const { 
     logoBuffer, 
-    stripOnBuffer,      // ✅ Extraer strips
-    stripOffBuffer,     // ✅ Extraer strips
+    stripOnBuffer,      
+    stripOffBuffer,     
     programName: pn, 
     bg, 
     fg,
-    designJson          // ✅ Extraer design_json
+    designJson          
   } = await loadBrandAssets(businessId);
 
   // 2) Assets/colores efectivos (request > BD > defaults)
@@ -381,12 +381,12 @@ async function createGoogleWalletObject({
   const hexFg = colors?.foreground || fg || '#E6E6E6';
   const effProg = programName || pn || 'Loyalty';
 
-  console.log('[createGoogleWalletObject] Colores a usar:', {
-    background: hexBg,
-    foreground: hexFg,
-    source: colors?.background ? 'request' : (bg ? 'database' : 'default'),
-    disableStrip: designJson?.assets?.disableStrip
-  });
+  //console.log('[createGoogleWalletObject] Colores a usar:', {
+  //  background: hexBg,
+  //  foreground: hexFg,
+  //  source: colors?.background ? 'request' : (bg ? 'database' : 'default'),
+  //  disableStrip: designJson?.assets?.disableStrip
+  //});
 
   // 3) Subir logo a HTTPS
   let logoUri = null;
@@ -414,10 +414,10 @@ async function createGoogleWalletObject({
     logoUri
   });
 
-  console.log('[createGoogleWalletObject] Clase asegurada con colores:', {
-    hexBg,
-    hexFg
-  });
+  //console.log('[createGoogleWalletObject] Clase asegurada con colores:', {
+  //  hexBg,
+  //  hexFg
+  //});
 
   // 5) Normalizar variante
   const normalizedVariant = (variant || '').toLowerCase().trim() || 'points';

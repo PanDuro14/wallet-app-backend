@@ -14,7 +14,7 @@ const parseDesignJson = (designJson) => {
     try {
       return JSON.parse(designJson);
     } catch (error) {
-      console.warn('[PWA Wallet Service] Error parsing design_json:', error.message);
+      //console.warn('[PWA Wallet Service] Error parsing design_json:', error.message);
       return {};
     }
   }
@@ -67,15 +67,15 @@ const buildPwaUrls = (serialNumber) => {
 const formatCardResponse = (rawData) => {
   if (!rawData) return null;
   
-  // ✅ Parsear design_json (aquí están los colores y configuración)
+  // Parsear design_json (aquí están los colores y configuración)
   const designJson = parseDesignJson(rawData.design_json);
   
-  console.log('[PWA Wallet Service] design_json parseado:', {
-    hasColors: !!designJson.colors,
-    hasStrips: !!designJson.strips,
-    cardType: designJson.cardType,
-    programName: designJson.programName
-  });
+  //console.log('[PWA Wallet Service] design_json parseado:', {
+  //  hasColors: !!designJson.colors,
+  //  hasStrips: !!designJson.strips,
+  //  cardType: designJson.cardType,
+  //  programName: designJson.programName
+  //});
   
   // ✅ Extraer colores del design_json (prioridad sobre fallbacks)
   const backgroundColor = designJson.colors?.background || '#2d3436';
@@ -99,6 +99,7 @@ const formatCardResponse = (rawData) => {
     },
     
     user: {
+      id: rawData.id,
       name: rawData.name,
       email: rawData.email,
       phone: rawData.phone
