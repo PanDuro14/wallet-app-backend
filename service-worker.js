@@ -103,7 +103,7 @@ self.addEventListener('fetch', (event) => {
 
 // ===== PUSH NOTIFICATIONS - CORREGIDO =====
 self.addEventListener('push', (event) => {
-  console.log('[SW] 📨 Push event received');
+  console.log('[SW] Push event received');
   
   // Datos por defecto
   let notificationData = {
@@ -122,12 +122,12 @@ self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       const payload = event.data.json();
-      console.log('[SW] 📦 Payload recibido:', payload);
+      console.log('[SW] Payload recibido:', payload);
 
       // El payload puede venir en diferentes estructuras
       // Opción 1: { notification: {...} }
       if (payload.notification) {
-        console.log('[SW] ✅ Estructura: payload.notification');
+        console.log('[SW] Estructura: payload.notification');
         notificationData = {
           title: payload.notification.title || notificationData.title,
           body: payload.notification.body || notificationData.body,
@@ -142,7 +142,7 @@ self.addEventListener('push', (event) => {
       }
       // Opción 2: { title, body, ... } directamente
       else if (payload.title || payload.body) {
-        console.log('[SW] ✅ Estructura: payload directo');
+        console.log('[SW] Estructura: payload directo');
         notificationData = {
           title: payload.title || notificationData.title,
           body: payload.body || notificationData.body,
@@ -157,17 +157,17 @@ self.addEventListener('push', (event) => {
       }
       // Opción 3: payload desconocido
       else {
-        console.warn('[SW] ⚠️ Estructura de payload desconocida:', payload);
+        console.warn('[SW] Estructura de payload desconocida:', payload);
       }
 
-      console.log('[SW] 📋 Notificación a mostrar:', notificationData);
+      console.log('[SW] Notificación a mostrar:', notificationData);
 
     } catch (err) {
-      console.error('[SW] ❌ Error parseando payload:', err);
-      console.log('[SW] 📄 Payload raw:', event.data.text());
+      console.error('[SW] Error parseando payload:', err);
+      console.log('[SW] Payload raw:', event.data.text());
     }
   } else {
-    console.log('[SW] ℹ️ Push sin datos, usando defaults');
+    console.log('[SW] Push sin datos, usando defaults');
   }
 
   // Mostrar notificación y notificar a clientes
@@ -184,7 +184,7 @@ self.addEventListener('push', (event) => {
         requireInteraction: notificationData.requireInteraction,
         tag: notificationData.tag
       }).then(() => {
-        console.log('[SW] ✅ Notificación mostrada:', notificationData.title);
+        console.log('[SW] Notificación mostrada:', notificationData.title);
       }),
       
       // Notificar a la PWA para que actualice
@@ -195,7 +195,7 @@ self.addEventListener('push', (event) => {
 
 // ===== NOTIFICATION CLICK =====
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] 🖱️ Notification clicked');
+  console.log('[SW] Notification clicked');
   console.log('[SW] Action:', event.action);
   console.log('[SW] Data:', event.notification.data);
 
@@ -209,7 +209,7 @@ self.addEventListener('notificationclick', (event) => {
         // Si hay un cliente con la PWA abierta, enfocarlo
         for (const client of clientList) {
           if (client.url.includes('/wallet/') && 'focus' in client) {
-            console.log('[SW] ✅ Enfocando cliente existente:', client.url);
+            console.log('[SW] Enfocando cliente existente:', client.url);
             return client.focus();
           }
         }
@@ -217,7 +217,7 @@ self.addEventListener('notificationclick', (event) => {
         // Si no hay cliente abierto, abrir uno nuevo
         if (clients.openWindow) {
           const url = event.notification.data?.url || '/';
-          console.log('[SW] 🆕 Abriendo nueva ventana:', url);
+          console.log('[SW] Abriendo nueva ventana:', url);
           return clients.openWindow(url);
         }
       })
@@ -231,11 +231,11 @@ async function notifyClientsToRefresh() {
     includeUncontrolled: true
   });
   
-  console.log('[SW] 📢 Notificando a', clientList.length, 'clientes');
+  console.log('[SW] Notificando a', clientList.length, 'clientes');
   
   for (const client of clientList) {
     if (client.url.includes('/wallet/')) {
-      console.log('[SW] 📤 Enviando mensaje UPDATE_AVAILABLE a:', client.url);
+      console.log('[SW] Enviando mensaje UPDATE_AVAILABLE a:', client.url);
       client.postMessage({ 
         type: 'UPDATE_AVAILABLE',
         message: 'Nueva actualización disponible',
@@ -247,11 +247,11 @@ async function notifyClientsToRefresh() {
 
 // ===== BACKGROUND SYNC =====
 self.addEventListener('sync', (event) => {
-  console.log('[SW] 🔄 Background sync:', event.tag);
+  console.log('[SW] Background sync:', event.tag);
   
   if (event.tag === 'sync-wallet') {
     event.waitUntil(Promise.resolve());
   }
 });
 
-console.log('[SW] ✅ Service Worker loaded and ready');
+console.log('[SW] Service Worker loaded and ready');

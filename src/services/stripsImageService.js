@@ -3,10 +3,10 @@ const sharp = require('sharp');
 class StripsImageService {
   async generateStripsImage({
     collected = 0,
-    total = 8,
+    total = 8, 
     stripImageOn,
     stripImageOff,
-    cardWidth = 300,
+    cardWidth = 450,
   }) {
     try {
       // ===== Manejo de imágenes ON / OFF =====
@@ -31,20 +31,32 @@ class StripsImageService {
         imageOffBuffer = await this.createDefaultImage('⭕', '#CCCCCC');
       }
 
-      // ===== Tamaño externo fijo (Wallet) =====
-      const outerWidth = cardWidth; // 300px
-      const outerHeight = 120;      // Apple Wallet slot
+      // ===== Tamaño externo (Wallet) =====
+      const outerWidth = cardWidth;
+      const outerHeight = 120;
 
-      // ===== Distribución en 2 filas =====
-      const numRows = 2;
-      const stripsPerRow = Math.ceil(total / numRows);
+      // ===== Área útil con MARGEN DE SEGURIDAD =====
+      const innerWidth = 310;  // reducido de 330 a 310 (más margen lateral)
+      const padding = 8;       // aumentado de 7 a 8
 
-      // ===== Tamaño interno (grilla) =====
-      const innerWidth = 260;
-      const innerHeight = 120;
+      // ===== Distribución según cantidad de strips =====
+      let numRows, stripsPerRow, innerHeight, stripWidth, stripHeight;
 
-      const stripWidth = Math.floor(innerWidth / stripsPerRow);
-      const stripHeight = Math.floor(innerHeight / numRows);
+      if (total <= 5) {
+        // 1 fila
+        numRows = 1;
+        stripsPerRow = total;
+        innerHeight = 72;  // reducido de 75 a 72
+        stripWidth = Math.floor(innerWidth / total);
+        stripHeight = 72;
+      } else {
+        // 2 filas
+        numRows = 2;
+        stripsPerRow = Math.ceil(total / 2);
+        innerHeight = 96;  // reducido de 100 a 96
+        stripWidth = Math.floor(innerWidth / stripsPerRow);
+        stripHeight = Math.floor(innerHeight / 2); // ~48px por fila
+      }
 
       // ===== Canvas interno =====
       const innerCanvas = sharp({
@@ -56,34 +68,64 @@ class StripsImageService {
         }
       });
 
-      // ===== Redimensionar imágenes =====
+      // ===== Redimensionar con MÁXIMA calidad =====
       const resizedOn = await sharp(imageOnBuffer)
-        .resize(stripWidth, stripHeight, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .png()
+        .resize(stripWidth - padding, stripHeight - padding, {
+          fit: 'inside',
+          kernel: 'lanczos3',
+          withoutEnlargement: false,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        })
+        .sharpen()
+        .png({ 
+          quality: 100,
+          compressionLevel: 6
+        })
         .toBuffer();
 
       const resizedOff = await sharp(imageOffBuffer)
-        .resize(stripWidth, stripHeight, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .png()
+        .resize(stripWidth - padding, stripHeight - padding, {
+          fit: 'inside',
+          kernel: 'lanczos3',
+          withoutEnlargement: false,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        })
+        .sharpen()
+        .png({ 
+          quality: 100,
+          compressionLevel: 6
+        })
         .toBuffer();
 
-      // ===== Pegar strips en el canvas interno =====
+      // ===== Obtener dimensiones reales =====
+      const onMetadata = await sharp(resizedOn).metadata();
+      const offMetadata = await sharp(resizedOff).metadata();
+
+      // ===== Pegar strips centrados en cada celda =====
       const compositeInner = [];
       for (let i = 0; i < total; i++) {
         const isCollected = i < collected;
         const row = Math.floor(i / stripsPerRow);
         const col = i % stripsPerRow;
 
+        // Centrar strip dentro de su celda
+        const metadata = isCollected ? onMetadata : offMetadata;
+        const xOffset = Math.floor((stripWidth - metadata.width) / 2);
+        const yOffset = Math.floor((stripHeight - metadata.height) / 2);
+
         compositeInner.push({
           input: isCollected ? resizedOn : resizedOff,
-          left: col * stripWidth,
-          top: row * stripHeight
+          left: col * stripWidth + xOffset,
+          top: row * stripHeight + yOffset
         });
       }
 
-      const innerImage = await innerCanvas.composite(compositeInner).png().toBuffer();
+      const innerImage = await innerCanvas
+        .composite(compositeInner)
+        .png({ quality: 100 })
+        .toBuffer();
 
-      // ===== Canvas externo =====
+      // ===== Canvas externo con centrado =====
       const offsetX = Math.floor((outerWidth - innerWidth) / 2);
       const offsetY = Math.floor((outerHeight - innerHeight) / 2);
 
@@ -96,26 +138,31 @@ class StripsImageService {
         }
       });
 
-      // Pegar la imagen interna centrada
+      // Output final con máxima calidad
       return await outerCanvas
         .composite([{ input: innerImage, left: offsetX, top: offsetY }])
-        .png()
+        .png({ 
+          quality: 100,
+          compressionLevel: 6
+        })
         .toBuffer();
 
     } catch (error) {
-      //console.error('[StripsImage] ❌ Error:', error.message);
       throw error;
     }
   }
 
   async createDefaultImage(text, color) {
+    // SVG con margen de seguridad
     const svg = `
-      <svg width="80" height="80" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="40" cy="40" r="35" fill="${color}" stroke="#FFFFFF" stroke-width="2"/>
-        <text x="40" y="50" font-size="20" text-anchor="middle" fill="white">${text}</text>
+      <svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="64" cy="64" r="54" fill="${color}" stroke="#FFFFFF" stroke-width="3"/>
+        <text x="64" y="79" font-size="31" font-weight="bold" text-anchor="middle" fill="white">${text}</text>
       </svg>
     `;
-    return await sharp(Buffer.from(svg)).png().toBuffer();
+    return await sharp(Buffer.from(svg))
+      .png({ quality: 100 })
+      .toBuffer();
   }
 }
 

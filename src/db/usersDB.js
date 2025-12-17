@@ -358,7 +358,9 @@ const updateUserFields = async (id, patch) => {
   const allowed = new Set([
     'name','email','phone','points','apple_auth_token','apple_pass_type_id',
     'card_detail_id','loyalty_account_id','wallet_url','wallet_added','wallet_added_at',
-    'serial_number','updated_at'
+    'serial_number','updated_at',
+    // ✅ AÑADIR: Permitir actualizar strips
+    'strips_collected','strips_required','reward_unlocked'
   ]);
 
   // Nunca permitas cambiar el pass type id a algo distinto
@@ -369,8 +371,6 @@ const updateUserFields = async (id, patch) => {
   if ('apple_auth_token' in patch) {
     patch.apple_auth_token = ensureAuthToken(patch.apple_auth_token);
   }
-  // (Opcional) impedir cambiar serial salvo que tú lo decidas
-  // if ('serial_number' in patch) delete patch.serial_number;
 
   const keys = Object.keys(patch).filter(k => allowed.has(k));
   if (!keys.length) {
@@ -389,7 +389,21 @@ const updateUserFields = async (id, patch) => {
 
   const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id=$1 RETURNING *`;
   const { rows } = await pool.query(sql, params);
-  return rows[0];
+  const updatedUser = rows[0];
+
+  try {
+    await pool.query(`
+      UPDATE apple_wallet_registrations
+      SET updated_at = NOW()
+      WHERE user_id = $1
+    `, [id]);
+    console.log(`[updateUserFields] ✅ Actualizado apple_wallet_registrations para user ${id}`);
+  } catch (regError) {
+    console.error('[updateUserFields] ⚠️ Error actualizando registrations:', regError.message);
+    // No bloquear la operación principal
+  }
+
+  return updatedUser;
 };
 
 // db/appleWalletdb.js (o donde defines tus queries de Apple Wallet)
@@ -420,7 +434,9 @@ const getUserDataBySerial = async (serial) => {
   });
 };
 
-const searchUsersByData = async (searchTerm, searchType) => {
+// db/usersDB.js
+
+const searchUsersByData = async (searchTerm, searchType, business_id) => {
   return new Promise((resolve, reject) => {
     let sql = `
       SELECT 
@@ -433,37 +449,41 @@ const searchUsersByData = async (searchTerm, searchType) => {
         strips_collected, 
         strips_required,
         reward_title,
-        reward_unlocked
+        reward_unlocked,
+        business_id
       FROM users 
-      WHERE 1=1
+      WHERE business_id = $1
     `;
     
-    const params = [];
+    const params = [business_id];
+    let paramIndex = 2;
     
     // Determinar el tipo de búsqueda
     if (searchType === 'serial') {
-      sql += ` AND serial_number = $1`;
+      sql += ` AND serial_number = $${paramIndex}`;
       params.push(searchTerm.trim());
     } else if (searchType === 'email') {
-      sql += ` AND LOWER(email) LIKE LOWER($1)`;
+      sql += ` AND LOWER(email) LIKE LOWER($${paramIndex})`;
       params.push(`%${searchTerm.trim()}%`);
     } else if (searchType === 'phone') {
-      // Limpiar el teléfono de espacios y caracteres especiales
       const cleanPhone = searchTerm.replace(/[\s\-\(\)]/g, '');
-      sql += ` AND REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE $1`;
+      sql += ` AND REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE $${paramIndex}`;
       params.push(`%${cleanPhone}%`);
     } else {
       // Búsqueda general en todos los campos
       const cleanPhone = searchTerm.replace(/[\s\-\(\)]/g, '');
       sql += ` AND (
-        serial_number = $1 OR
-        LOWER(email) LIKE LOWER($2) OR
-        REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE $3
+        serial_number = $${paramIndex} OR
+        LOWER(email) LIKE LOWER($${paramIndex + 1}) OR
+        REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE $${paramIndex + 2}
       )`;
       params.push(searchTerm.trim(), `%${searchTerm.trim()}%`, `%${cleanPhone}%`);
     }
     
     sql += ` LIMIT 10`;
+
+    console.log('[searchUsersByData] SQL:', sql);
+    console.log('[searchUsersByData] Params:', params);
 
     pool.query(sql, params, (error, results) => {
       if (error) {
@@ -472,6 +492,8 @@ const searchUsersByData = async (searchTerm, searchType) => {
           code: error.code 
         });
       }
+      
+      console.log('[searchUsersByData] Resultados:', results.rows.length);
       resolve(results.rows);
     });
   });
@@ -516,6 +538,8 @@ const getInactiveUsers = async (inactiveDays = 7, businessId = null) => {
     throw error;
   }
 };
+
+
 
 
 module.exports = {

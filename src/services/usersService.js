@@ -295,21 +295,68 @@ const getUserDataBySerial = async ({ serial }) => {
   }
 };
 
+// Calcular en qué nivel de premio está el usuario (multi-tier)
+const calculateCurrentTier = (user, multiTierConfig) => {
+  if (!multiTierConfig || !multiTierConfig.rewards) {
+    return null;
+  }
+  
+  const totalCollected = user.strips_collected || 0;
+  let accumulatedStrips = 0;
+  
+  for (let i = 0; i < multiTierConfig.rewards.length; i++) {
+    const reward = multiTierConfig.rewards[i];
+    accumulatedStrips += reward.strips_required;
+    
+    if (totalCollected < accumulatedStrips) {
+      // Usuario está en este nivel
+      const stripsInCurrentTier = totalCollected - (accumulatedStrips - reward.strips_required);
+      
+      return {
+        currentLevel: i + 1,
+        totalLevels: multiTierConfig.rewards.length,
+        currentReward: reward,
+        stripsInCurrentTier,
+        stripsRequiredForCurrentTier: reward.strips_required,
+        progressPercent: Math.floor((stripsInCurrentTier / reward.strips_required) * 100),
+        isComplete: false,
+        nextReward: multiTierConfig.rewards[i + 1] || null
+      };
+    }
+  }
+  
+  // Usuario completó todos los niveles
+  const lastReward = multiTierConfig.rewards[multiTierConfig.rewards.length - 1];
+  return {
+    currentLevel: multiTierConfig.rewards.length,
+    totalLevels: multiTierConfig.rewards.length,
+    currentReward: lastReward,
+    stripsInCurrentTier: lastReward.strips_required,
+    stripsRequiredForCurrentTier: lastReward.strips_required,
+    progressPercent: 100,
+    isComplete: true,
+    nextReward: null
+  };
+};
+
 module.exports = {
   // Métodos originales (ahora con notificaciones automáticas)
   getAllUsers,
   getOneUser,
   getOneUserByBusiness,
-  createUser,          // ✅ Con bienvenida automática
-  updateUser,          // ✅ Con detección automática de notificaciones
+  createUser,          // Con bienvenida automática
+  updateUser,          // Con detección automática de notificaciones
   deleteUser,
   saveUserWallet,
   markWalletAdded, 
   getUserDataBySerial,
   
   // Nuevos métodos específicos para actualizar con notificaciones
-  updatePoints,        // ✅ Actualiza puntos + notifica
-  updateStrips,        // ✅ Actualiza strips + notifica con detección de completación
-  sendReminderToUser,  // ✅ Envía recordatorio manual
-  getInactiveUsers     // ✅ Para cron jobs de recordatorios masivos
+  updatePoints,        // Actualiza puntos + notifica
+  updateStrips,        // Actualiza strips + notifica con detección de completación
+  sendReminderToUser,  // Envía recordatorio manual
+  getInactiveUsers,     // Para cron jobs de recordatorios masivos
+
+  // Calcular current tier xd
+  calculateCurrentTier
 };

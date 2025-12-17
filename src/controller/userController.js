@@ -105,12 +105,18 @@ const getUserDataBySerial = async (req, res) => {
 
 const getUserByData = async (req, res) => {
   try {
-    const { serial, email, phone } = req.body; 
+    const { serial, email, phone, business_id } = req.body; 
     const searchTerm = serial || email || phone; 
-    
+  
     if (!searchTerm) {
       return res.status(400).json({ 
         error: 'Proporciona un término de búsqueda (serial, email o phone)' 
+      }); 
+    }
+
+    if (!business_id){
+      return res.status(400).json({
+        error: 'Proporciona un id de negocio en el body '
       }); 
     }
 
@@ -125,7 +131,7 @@ const getUserByData = async (req, res) => {
     }
 
     // Llamar a la capa de base de datos
-    const users = await userDB.searchUsersByData(searchTerm, searchType);
+    const users = await userDB.searchUsersByData(searchTerm, searchType, business_id);
     
     if (!users || users.length === 0) {
       return res.status(404).json({ 

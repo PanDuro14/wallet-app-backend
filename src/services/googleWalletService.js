@@ -261,6 +261,9 @@ async function ensureLoyaltyClass({
     throw new Error(`GET loyaltyClass falló (${getResp.status}): ${txt}`);
   }
 
+  console.log('[ensureLoyaltyClass] classId intentando acceder:', classId);
+  console.log('[ensureLoyaltyClass] GET response status:', getResp.status);
+
   // Crear la clase con el logo desde la URL pública
   const body = {
     id: classId,

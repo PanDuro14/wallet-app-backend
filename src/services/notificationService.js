@@ -19,7 +19,7 @@ if (!admin.apps.length) {
     
     console.log('🔥 [Firebase Admin] Inicializado correctamente');
   } catch (error) {
-    console.error(' [Firebase Admin] Error al inicializar:', error.message);
+    console.error('❌ [Firebase Admin] Error al inicializar:', error.message);
   }
 }
 
@@ -144,22 +144,52 @@ function getNotificationMessage(type, data = {}, lang = 'es') {
 }
 
 /**
- * Envía notificación a Apple Wallet
+ *  CORREGIDO: Envía notificación a Apple Wallet con { serial } en payload
  */
 async function sendAppleWalletNotification(serial) {
   try {
     const tokens = await listPushTokensBySerial(serial);
     
     if (!tokens || tokens.length === 0) {
+      console.log('[sendAppleWalletNotification] ⚠️ No tokens para serial:', serial);
       return { success: false, message: 'No tokens found' };
     }
 
+    console.log(`[sendAppleWalletNotification] 📤 Enviando APNs a ${tokens.length} dispositivo(s)`);
+
+    //  CRÍTICO: Pasar { serial } como payload para que Apple Wallet actualice
     const results = await Promise.allSettled(
-      tokens.map(t => notifyWallet(t.push_token, t.env))
+      tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
     );
 
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    let successful = 0;
+    let failed = 0;
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const token = tokens[i];
+      
+      if (r.status === 'fulfilled') {
+        const { status, reason } = r.value;
+        console.log('[APNs] Result:', {
+          token: token.push_token.substring(0, 8) + '...',
+          env: token.env,
+          status,
+          reason: reason || 'OK'
+        });
+        
+        if (status === 200) {
+          successful++;
+        } else {
+          failed++;
+        }
+      } else {
+        failed++;
+        console.error('[APNs] Error:', r.reason?.message || r.reason);
+      }
+    }
+
+    console.log(`[sendAppleWalletNotification]  Resultado: ${successful}/${tokens.length} exitosos`);
 
     return {
       success: successful > 0,
@@ -168,6 +198,7 @@ async function sendAppleWalletNotification(serial) {
       failed
     };
   } catch (error) {
+    console.error('[sendAppleWalletNotification] ❌ Error fatal:', error);
     return { success: false, error: error.message };
   }
 }
@@ -222,7 +253,7 @@ async function sendPWANotification(userId, type, data = {}, lang = 'es') {
       if (results[i].status === 'rejected') {
         const error = results[i].reason;
         if (error?.statusCode === 410 || error?.message?.includes('NotRegistered')) {
-          console.log('[FCM] 🗑️ Limpiando subscripción expirada');
+          console.log('[FCM]  Limpiando subscripción expirada');
           await removeExpiredSubscription(subscriptions[i]);
         }
       }
@@ -270,13 +301,12 @@ async function sendFCMNotification(subscription, message, data) {
         userId: String(data.userId || ''),
         businessId: String(data.businessId || ''),
         timestamp: String(Date.now()),
-        // ✅ Pasar URLs como data para que el SW las use
         icon: iconUrl,
         badge: badgeUrl
       },
       webpush: {
         headers: {
-          Urgency: 'high' // ← Prioridad alta
+          Urgency: 'high'
         },
         notification: {
           title: message.title,
@@ -293,8 +323,6 @@ async function sendFCMNotification(subscription, message, data) {
     };
 
     console.log('[FCM] 📤 Enviando con Admin SDK...');
-    console.log('[FCM] 🖼️ Icon URL:', iconUrl);
-    console.log('[FCM] 📦 Payload completo:', JSON.stringify(payload, null, 2));
     
     const result = await admin.messaging().send(payload);
     console.log('[FCM] ✅ Enviado:', result);
@@ -318,7 +346,7 @@ async function removeExpiredSubscription(subscription) {
     );
     console.log('[removeExpiredSubscription] ✅ Subscription eliminada');
   } catch (error) {
-    console.error('[removeExpiredSubscription]  Error:', error);
+    console.error('[removeExpiredSubscription] ❌ Error:', error);
   }
 }
 

@@ -207,19 +207,21 @@ const updateBusiness = async (id, updates = {}) => {
 
 
 // Eliminar un negocio por ID
-// Eliminar un negocio por ID - ACTUALIZADO con user_strips_log
 const deleteBusiness = async (id) => {
   return new Promise(async (resolve, reject) => {
     try {
-      // 1. Eliminar user_strips_log (depende de users)
-      await deleteAllUserStripsLogByBusiness(id);
-      // 2. Eliminar apple_wallet_registrations (depende de users)
-      await deleteAllAppleWalletRegistrationsByBusiness(id);  
-      // 3. Eliminar todos los usuarios/clientes
+  
+      // 1. user_strips_log (depende de users)
+      await deleteAllUserStripsLogByBusiness(id);    
+      // 2. apple_wallet_registrations (depende de users)
+      await deleteAllAppleWalletRegistrationsByBusiness(id);
+      // 3. push_subscriptions (depende de users) 
+      await deleteAllPushSubscriptionsByBusiness(id);
+      // 4. users (depende de card_details y business)
       await deleteAllClientsByBusiness(id);
-      // 4. Eliminar todos los card_details
-      await deleteAllCardDetailsByBusiness(id);  
-      // 5. Finalmente eliminar el negocio
+      // 5. card_details (depende de business)
+      await deleteAllCardDetailsByBusiness(id);
+      // 6. Finalmente eliminar el negocio
       const sql = 'DELETE FROM businesses WHERE id = $1 RETURNING id, name';
       pool.query(sql, [id], (error, results) => {
         if (error) {
@@ -302,18 +304,46 @@ async function deleteAllClientsByBusiness(business_id) {
   }); 
 }
 
+// Eliminar un usuario individual con todas sus dependencias
 async function deleteOneClientByBusiness(id, business_id) {
-  return new Promise((resolve, reject) => {
-    const sql = `
-      DELETE FROM users WHERE business_id = $1 AND id = $2
-    `; 
-    // FIX: Cambié el segundo parámetro de 'reject' a 'results'
-    pool.query(sql, [business_id, id], (error, results) => {
-      if(error) return reject(error); 
-      console.log(`Cliente ${id} eliminado del negocio ${business_id}`);
-      resolve(results.rowCount); 
-    }); 
-  }); 
+  return new Promise(async (resolve, reject) => {
+    try {
+      // 1. Eliminar user_strips_log del usuario
+      await deleteUserStripsLogByUser(id);
+      
+      // 2. Eliminar apple_wallet_registrations del usuario
+      await deleteAppleWalletRegistrationsByUser(id);
+      
+      // 3. Eliminar push_subscriptions del usuario
+      await deletePushSubscriptionsByUser(id);
+      
+      // 4. Eliminar el usuario
+      const sql = `
+        DELETE FROM users 
+        WHERE id = $1 AND business_id = $2
+        RETURNING id, email, name
+      `;
+      
+      pool.query(sql, [id, business_id], (error, results) => {
+        if (error) return reject(error);
+        
+        if (results.rowCount === 0) {
+          return reject(new Error('Usuario no encontrado'));
+        }
+        
+        console.log(`Usuario ${id} eliminado del negocio ${business_id}`);
+        resolve({
+          success: true,
+          message: 'Usuario y sus datos relacionados eliminados',
+          deletedUser: results.rows[0]
+        });
+      });
+      
+    } catch (error) {
+      console.error('Error al eliminar usuario:', error);
+      reject(error);
+    }
+  });
 }
 
 async function deleteAllCardDetailsByBusiness(business_id) {
@@ -362,6 +392,59 @@ async function deleteAllUserStripsLogByBusiness(business_id) {
   }); 
 }
 
+// Elimina todas las push_subscriptions de usuarios de un negocio
+async function deleteAllPushSubscriptionsByBusiness(business_id) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      DELETE FROM push_subscriptions 
+      WHERE user_id IN (
+        SELECT id FROM users WHERE business_id = $1
+      )
+    `; 
+    pool.query(sql, [business_id], (error, results) => {
+      if(error) return reject(error);
+      console.log(`Push subscriptions eliminadas del negocio ${business_id}: ${results.rowCount}`);
+      resolve(results.rowCount); 
+    }); 
+  }); 
+}
+
+
+// Eliminar strips log de un usuario específico
+async function deleteUserStripsLogByUser(user_id) {
+  return new Promise((resolve, reject) => {
+    const sql = 'DELETE FROM user_strips_log WHERE user_id = $1';
+    pool.query(sql, [user_id], (error, results) => {
+      if (error) return reject(error);
+      console.log(`  Strips log eliminados del usuario ${user_id}: ${results.rowCount}`);
+      resolve(results.rowCount);
+    });
+  });
+}
+
+// Eliminar registros de Apple Wallet de un usuario específico
+async function deleteAppleWalletRegistrationsByUser(user_id) {
+  return new Promise((resolve, reject) => {
+    const sql = 'DELETE FROM apple_wallet_registrations WHERE user_id = $1';
+    pool.query(sql, [user_id], (error, results) => {
+      if (error) return reject(error);
+      console.log(`  Apple Wallet registrations eliminados del usuario ${user_id}: ${results.rowCount}`);
+      resolve(results.rowCount);
+    });
+  });
+}
+
+// Eliminar push subscriptions de un usuario específico
+async function deletePushSubscriptionsByUser(user_id) {
+  return new Promise((resolve, reject) => {
+    const sql = 'DELETE FROM push_subscriptions WHERE user_id = $1';
+    pool.query(sql, [user_id], (error, results) => {
+      if (error) return reject(error);
+      console.log(`  Push subscriptions eliminadas del usuario ${user_id}: ${results.rowCount}`);
+      resolve(results.rowCount);
+    });
+  });
+}
 
 module.exports = {
   loginBusiness,

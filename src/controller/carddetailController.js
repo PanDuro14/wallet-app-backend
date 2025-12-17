@@ -162,67 +162,270 @@ const generateQR = async (req, res) => {
 };
 
 // NUEVOS endpoints (no tocan multipart)
-
 const createDesignUnified = async (req, res) => {
   try {
     const body = req.body || {};
     if (!body.businessId) return res.status(400).json({ error: 'businessId requerido' });
 
-    // ====== NUEVO: Validaciones específicas para strips ======
+    // VALIDACIONES ACTUALIZADAS PARA STRIPS (single y multi-tier)
     if (body.cardType === 'strips') {
-      // Validar configuración mínima de strips
       if (!body.strips) {
         return res.status(400).json({ error: 'Configuración strips requerida para cardType "strips"' });
       }
       
-      if (!body.strips.rewardTitle) {
-        return res.status(400).json({ error: 'strips.rewardTitle es requerido' });
-      }
+      // Detectar si es multi-tier o single
+      const isMultiTier = Array.isArray(body.strips.rewards) && body.strips.rewards.length > 0;
       
-      if (!body.strips.total || body.strips.total < 1 || body.strips.total > 20) {
-        return res.status(400).json({ error: 'strips.total debe ser entre 1 y 20' });
-      }
+      if (isMultiTier) {
+        // MULTI-TIER: validar array de rewards
+        if (body.strips.rewards.length === 0) {
+          return res.status(400).json({ error: 'strips.rewards debe tener al menos 1 elemento' });
+        }
+        
+        // Validar cada reward
+        for (let i = 0; i < body.strips.rewards.length; i++) {
+          const reward = body.strips.rewards[i];
+          if (!reward.title) {
+            return res.status(400).json({ error: `strips.rewards[${i}].title es requerido` });
+          }
+          if (!reward.strips_required || reward.strips_required < 1) {
+            return res.status(400).json({ error: `strips.rewards[${i}].strips_required debe ser mayor a 0` });
+          }
+        }
+        
+        console.log('[createDesignUnified] Multi-tier detectado:', {
+          levels: body.strips.rewards.length,
+          rewards: body.strips.rewards.map(r => r.title)
+        });
+        
+      } else {
+        // SINGLE: validar campos tradicionales
+        if (!body.strips.rewardTitle) {
+          return res.status(400).json({ error: 'strips.rewardTitle es requerido para tarjetas single' });
+        }
+        
+        if (!body.strips.total || body.strips.total < 1 || body.strips.total > 20) {
+          return res.status(400).json({ error: 'strips.total debe ser entre 1 y 20' });
+        }
 
-      // Valores por defecto para strips
-      body.strips.total = Number(body.strips.total);
-      body.strips.layout = body.strips.layout || 'horizontal';
-      body.strips.rewardDescription = body.strips.rewardDescription || '';
-      
-      //console.log('[createDesignUnified] Configuración de strips validada:', {
-      //  total: body.strips.total,
-      //  rewardTitle: body.strips.rewardTitle,
-      //  layout: body.strips.layout,
-      //  hasOnImage: !!body.strips.stripImageOn,
-      //  hasOffImage: !!body.strips.stripImageOff
-      //});
+        // Normalizar valores single
+        body.strips.total = Number(body.strips.total);
+        body.strips.layout = body.strips.layout || 'horizontal';
+        body.strips.rewardDescription = body.strips.rewardDescription || '';
+        
+        console.log('[createDesignUnified] Single detectado:', {
+          total: body.strips.total,
+          reward: body.strips.rewardTitle
+        });
+      }
     }
 
-    // normaliza barcode para guardar limpio (tu código original)
+    // TRANSFORMAR strips -> rewardSystem
+    if (body.cardType === 'strips' && body.strips) {
+      const isMultiTier = Array.isArray(body.strips.rewards) && body.strips.rewards.length > 0;
+      
+      if (isMultiTier) {
+        body.rewardSystem = {
+          type: 'multi-tier',
+          multiTier: {
+            rewards: body.strips.rewards.map((r, idx) => ({
+              level: idx + 1,
+              title: r.title,
+              description: r.description || null,
+              strips_required: r.strips_required,
+              icon: r.icon || null
+            }))
+          }
+        };
+      } else {
+        body.rewardSystem = {
+          type: 'single',
+          single: {
+            strips_required: body.strips.total,
+            reward_title: body.strips.rewardTitle,
+            reward_description: body.strips.rewardDescription || null
+          }
+        };
+      }
+      
+      console.log('[createDesignUnified] rewardSystem creado:', {
+        type: body.rewardSystem.type
+      });
+    }
+
+    // Normalizar barcode
     if (body.barcode) body.barcode = normalizeBarcodeSpec(body.barcode);
     
+    // Guardar
     const saved = await carddetailService.createUnifiedDesign({
       business_id: Number(body.businessId),
       design_json: body
     });
     
-    return res.status(201).json({ 
+    // Respuesta según tipo
+    const response = { 
       id: saved.id, 
-      design: saved.design_json,
-      // Información adicional para strips
-      ...(body.cardType === 'strips' ? {
-        strips_info: {
+      design: saved.design_json
+    };
+    
+    if (body.cardType === 'strips' && body.rewardSystem) {
+      if (body.rewardSystem.type === 'multi-tier') {
+        response.strips_info = {
+          type: 'multi-tier',
+          total_levels: body.rewardSystem.multiTier.rewards.length,
+          rewards: body.rewardSystem.multiTier.rewards.map(r => ({
+            level: r.level,
+            title: r.title,
+            strips_required: r.strips_required
+          }))
+        };
+      } else {
+        response.strips_info = {
+          type: 'single',
           total: body.strips.total,
           reward: body.strips.rewardTitle,
           has_custom_images: !!(body.strips.stripImageOn && body.strips.stripImageOff)
-        }
-      } : {})
-    });
+        };
+      }
+    }
+    
+    return res.status(201).json(response);
+    
   } catch (e) {
-    //console.error('createDesignUnified', e);
+    console.error('[createDesignUnified] Error:', e);
     return res.status(400).json({ error: e.message || 'Invalid design body' });
   }
 };
 
+const createDesignWithStripsImages = async (req, res) => {
+  try {
+    // Parsear el JSON del campo 'design' 
+    let designData;
+    try {
+      designData = JSON.parse(req.body.design || '{}');
+    } catch (parseError) {
+      return res.status(400).json({ error: 'Campo design debe ser JSON válido' });
+    }
+
+    if (!designData.businessId) {
+      return res.status(400).json({ error: 'businessId requerido en design' });
+    }
+
+    // Procesar imágenes subidas
+    const stripImageOnBuffer = req.files['strip_image_on']?.[0]?.buffer;
+    const stripImageOffBuffer = req.files['strip_image_off']?.[0]?.buffer;
+
+    console.log('[createDesignWithStripsImages] Imágenes recibidas:', {
+      strip_on: !!stripImageOnBuffer,
+      strip_off: !!stripImageOffBuffer
+    });
+
+    // Inicializar configuración de strips si no existe
+    if (!designData.strips) {
+      designData.strips = {};
+    }
+
+    // Convertir imágenes a base64 y agregarlas al design
+    if (stripImageOnBuffer) {
+      const base64On = stripImageOnBuffer.toString('base64');
+      designData.strips.stripImageOn = `data:image/png;base64,${base64On}`;
+    }
+
+    if (stripImageOffBuffer) {
+      const base64Off = stripImageOffBuffer.toString('base64');
+      designData.strips.stripImageOff = `data:image/png;base64,${base64Off}`;
+    }
+
+    // Forzar cardType a strips
+    designData.cardType = 'strips';
+
+    // VALIDACIONES ACTUALIZADAS (mismo código que createDesignUnified)
+    const isMultiTier = Array.isArray(designData.strips.rewards) && designData.strips.rewards.length > 0;
+    
+    if (isMultiTier) {
+      // Multi-tier: validar rewards
+      for (let i = 0; i < designData.strips.rewards.length; i++) {
+        const reward = designData.strips.rewards[i];
+        if (!reward.title) {
+          return res.status(400).json({ error: `strips.rewards[${i}].title es requerido` });
+        }
+        if (!reward.strips_required || reward.strips_required < 1) {
+          return res.status(400).json({ error: `strips.rewards[${i}].strips_required debe ser mayor a 0` });
+        }
+      }
+      
+      // Crear rewardSystem multi-tier
+      designData.rewardSystem = {
+        type: 'multi-tier',
+        multiTier: {
+          rewards: designData.strips.rewards.map((r, idx) => ({
+            level: idx + 1,
+            title: r.title,
+            description: r.description || null,
+            strips_required: r.strips_required,
+            icon: r.icon || null
+          }))
+        }
+      };
+      
+    } else {
+      // Single: validaciones tradicionales
+      if (!designData.strips.rewardTitle) {
+        return res.status(400).json({ error: 'strips.rewardTitle es requerido' });
+      }
+
+      if (!designData.strips.total) {
+        designData.strips.total = 8; // Default
+      }
+
+      designData.strips.total = Number(designData.strips.total);
+      designData.strips.layout = designData.strips.layout || 'horizontal';
+      
+      // Crear rewardSystem single
+      designData.rewardSystem = {
+        type: 'single',
+        single: {
+          strips_required: designData.strips.total,
+          reward_title: designData.strips.rewardTitle,
+          reward_description: designData.strips.rewardDescription || null
+        }
+      };
+    }
+
+    // Guardar usando el mismo servicio
+    const saved = await carddetailService.createUnifiedDesign({
+      business_id: Number(designData.businessId),
+      design_json: designData
+    });
+
+    const response = { 
+      id: saved.id, 
+      design: saved.design_json
+    };
+    
+    if (isMultiTier) {
+      response.strips_info = {
+        type: 'multi-tier',
+        total_levels: designData.rewardSystem.multiTier.rewards.length,
+        rewards: designData.rewardSystem.multiTier.rewards,
+        has_custom_images: !!(stripImageOnBuffer && stripImageOffBuffer)
+      };
+    } else {
+      response.strips_info = {
+        type: 'single',
+        total: designData.strips.total,
+        reward: designData.strips.rewardTitle,
+        has_custom_images: !!(stripImageOnBuffer && stripImageOffBuffer)
+      };
+    }
+    
+    return res.status(201).json(response);
+
+  } catch (e) {
+    console.error('[createDesignWithStripsImages] Error:', e);
+    return res.status(500).json({ error: 'Error al crear diseño con imágenes de strips' });
+  }
+};
 
 const updateDesignUnified = async (req, res) => {
   try {
@@ -277,102 +480,6 @@ const updateMeta = async (req, res) => {
   } catch (e) {
     //console.error('updateMeta error', e);
     return res.status(502).json({ error: 'Error al actualizar meta' });
-  }
-};
-
-
-// ====== NUEVO: Función para crear design con imágenes subidas ======
-const createDesignWithStripsImages = async (req, res) => {
-  try {
-    // Parsear el JSON del campo 'design' 
-    let designData;
-    try {
-      designData = JSON.parse(req.body.design || '{}');
-    } catch (parseError) {
-      return res.status(400).json({ error: 'Campo design debe ser JSON válido' });
-    }
-
-    if (!designData.businessId) {
-      return res.status(400).json({ error: 'businessId requerido en design' });
-    }
-
-    // Procesar imágenes subidas
-    const stripImageOnBuffer = req.files['strip_image_on']?.[0]?.buffer;
-    const stripImageOffBuffer = req.files['strip_image_off']?.[0]?.buffer;
-
-    //console.log('[createDesignWithStripsImages] Imágenes recibidas:', {
-    //  strip_on: !!stripImageOnBuffer,
-    //  strip_off: !!stripImageOffBuffer,
-    //  strip_on_size: stripImageOnBuffer?.length || 0,
-    //  strip_off_size: stripImageOffBuffer?.length || 0
-    //});
-
-    // Inicializar configuración de strips si no existe
-    if (!designData.strips) {
-      designData.strips = {};
-    }
-
-    // Convertir imágenes a base64 y agregarlas al design
-    if (stripImageOnBuffer) {
-      try {
-        const base64On = stripImageOnBuffer.toString('base64');
-        designData.strips.stripImageOn = `data:image/png;base64,${base64On}`;
-        //console.log('[createDesignWithStripsImages] Imagen ON convertida:', base64On.length, 'chars');
-      } catch (convertError) {
-        //console.error('Error convirtiendo imagen ON:', convertError);
-        return res.status(400).json({ error: 'Error procesando strip_image_on' });
-      }
-    }
-
-    if (stripImageOffBuffer) {
-      try {
-        const base64Off = stripImageOffBuffer.toString('base64');
-        designData.strips.stripImageOff = `data:image/png;base64,${base64Off}`;
-        //console.log('[createDesignWithStripsImages] Imagen OFF convertida:', base64Off.length, 'chars');
-      } catch (convertError) {
-        //console.error('Error convirtiendo imagen OFF:', convertError);
-        return res.status(400).json({ error: 'Error procesando strip_image_off' });
-      }
-    }
-
-    // Forzar cardType a strips
-    designData.cardType = 'strips';
-
-    // Validaciones mínimas (reutilizando lógica)
-    if (!designData.strips.rewardTitle) {
-      return res.status(400).json({ error: 'strips.rewardTitle es requerido' });
-    }
-
-    if (!designData.strips.total) {
-      designData.strips.total = 10; // Default
-    }
-
-    designData.strips.total = Number(designData.strips.total);
-    designData.strips.layout = designData.strips.layout || 'horizontal';
-
-    // Guardar usando el mismo servicio
-    const saved = await carddetailService.createUnifiedDesign({
-      business_id: Number(designData.businessId),
-      design_json: designData
-    });
-
-    return res.status(201).json({ 
-      id: saved.id, 
-      design: saved.design_json,
-      strips_info: {
-        total: designData.strips.total,
-        reward: designData.strips.rewardTitle,
-        has_custom_images: !!(stripImageOnBuffer && stripImageOffBuffer),
-        images_processed: {
-          strip_on: !!stripImageOnBuffer,
-          strip_off: !!stripImageOffBuffer
-        }
-      }
-    });
-
-  } catch (e) {
-    //console.error('createDesignWithStripsImages error:', e);
-    return res.status(500).json({ error: 'Error al crear diseño con imágenes de strips' });
   }
 };
 

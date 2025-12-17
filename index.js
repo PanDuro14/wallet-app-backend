@@ -96,6 +96,7 @@ const v1Admin = require('./src/v1/routes/adminRoutes');
 const v1Assets = require('./src/v1/routes/assetsRoutes'); 
 const v1pwaWallet = require('./src/v1/routes/pwaWalletRoutes');
 const notificationRoutes = require('./src/v1/routes/notificationRoutes');
+const stripsRoutes = require('./src/v1/routes/strips');
 
 app.use('/api/v1/business', v1Business);
 app.use('/api/v1/cards', v1CardDetails); 
@@ -106,6 +107,7 @@ app.use('/api/v1/admin', v1Admin);
 app.use('/api/v1/assets', v1Assets); 
 app.use('/api/wallet', v1pwaWallet);
 app.use('/api/v1/notifications', notificationRoutes); 
+app.use('/api/v1/strips', stripsRoutes);
 
 // ===== MANIFEST DINÁMICO =====
 app.get('/wallet/:serial/manifest.json', async (req, res) => {
@@ -114,7 +116,7 @@ app.get('/wallet/:serial/manifest.json', async (req, res) => {
   try {
     const cardData = await fetchCardDataBySerial(serial);
     
-    console.log('📋 Card Data para manifest:', cardData);
+    console.log(' Card Data para manifest:', cardData);
     
     const businessId = cardData?.business_id;
     const baseUrl = `${req.protocol}://${req.get('host')}`;

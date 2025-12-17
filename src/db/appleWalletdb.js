@@ -1,4 +1,4 @@
-// db/appleWalletdb.js
+// db/appleWalletdb.js - VERSIÓN CORREGIDA
 const dbConnection = require('./dbConection');
 const dbLocal = require('./dbConectionLocal');
 
@@ -87,7 +87,10 @@ async function bumpPointsBySerial(serial, delta) {
   return rows[0] || null;
 }
 
-/** Passes actualizados desde 'since' para un device+passType (para GET /registrations) */
+/** 
+ *  FIX: Mejorada para manejar timestamps más confiablemente
+ * Passes actualizados desde 'since' para un device+passType (para GET /registrations) 
+ */
 async function listUpdatedSerialsSince({ deviceId, passTypeId, since }) {
   let sinceSec = 0;
   if (since) {
@@ -109,10 +112,19 @@ async function listUpdatedSerialsSince({ deviceId, passTypeId, since }) {
      ORDER BY u.updated_at DESC
   `;
   const { rows } = await pool.query(sql, [deviceId, passTypeId, sinceSec]);
-  const last = rows[0]?.updated_at || new Date();
+  
+  //  FIX: Siempre retornar un lastUpdated válido, incluso si no hay rows
+  let lastUpdatedDate;
+  if (rows.length > 0 && rows[0].updated_at) {
+    lastUpdatedDate = new Date(rows[0].updated_at);
+  } else {
+    // Si no hay actualizaciones, usar timestamp actual
+    lastUpdatedDate = new Date();
+  }
+  
   return {
     serialNumbers: rows.map(r => r.serial),
-    lastUpdated: new Date(last).toUTCString()
+    lastUpdated: lastUpdatedDate.toISOString() //  FIX: ISO format es más consistente
   };
 }
 
@@ -125,11 +137,7 @@ async function updateRegistrationEnv({ serial, pushToken, env }) {
   await pool.query(sql, [serial, pushToken, env]);
 }
 
-// AGREGAR estas funciones al final de tu archivo appleWalletdb.js
-
-/** Otorgar un strip a un usuario (con transaction) */
 async function grantStripBySerial(serial, stripNumber) {
-  // Iniciar transacción
   await pool.query('BEGIN');
   
   try {

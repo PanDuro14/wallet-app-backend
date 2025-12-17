@@ -5,14 +5,12 @@ const usersService      = require('../services/usersService');
 const businessService   = require('../services/businessService');
 const carddetailService = require('../services/carddetailService');
 
-// IMPORTS CORREGIDOS - Importar funciones específicas
 const { 
-  issueGoogleWalletLink,      // JWT legacy (más confiable para crear)
-  createGoogleWalletObject,   // REST API
-  issueGoogleWallet           // Wrapper unificado
+  issueGoogleWalletLink,
+  createGoogleWalletObject,
+  issueGoogleWallet
 } = require('../processes/walletProcess');
 
-//  NUEVO: Import para PWA URLs
 const pwaWalletService = require('../services/pwaWalletService');
 
 const pickFirst = (arr) => (Array.isArray(arr) && arr.length ? arr[0] : null);
@@ -27,7 +25,7 @@ const ensureBusiness = async (business_id) => {
   return biz;
 };
 
-/* ====================== HELPERS PARA DESENROLLAR DISEÑOS ====================== */
+/* ====================== HELPERS ====================== */
 function unwrapDesignRow(row) {
   if (!row) return null;
   if ('business_id' in row || 'design_json' in row) return row;
@@ -61,15 +59,6 @@ const pickDesign = async (business_id, card_detail_id) => {
     const raw = await carddetailService.getOneCardDetails(id);
     const design = unwrapDesignRow(raw);
 
-    ////console.log('[pickDesign] check', {
-    //  input_business_id: bizId,
-    //  input_card_detail_id: id,
-    //  got_row: !!raw,
-    //  unwrapped: !!design,
-    //  keys: Object.keys(design || {}),
-    //  row_business_id: design?.business_id
-    //});
-
     if (!design) {
       const err = new Error('card_detail_id no encontrado');
       err.statusCode = 404;
@@ -88,12 +77,6 @@ const pickDesign = async (business_id, card_detail_id) => {
   const list = await carddetailService.getAllCardsByBusiness(bizId);
   const first = Array.isArray(list) && list.length ? list[0] : null;
 
-  ////console.log('[pickDesign] fallback-first', {
-  //  bizId,
-  //  count: Array.isArray(list) ? list.length : 0,
-  //  first: first?.id
-  //});
-
   if (!first) {
     const err = new Error('El negocio no tiene diseños de tarjeta');
     err.statusCode = 400;
@@ -102,7 +85,7 @@ const pickDesign = async (business_id, card_detail_id) => {
   return first;
 };
 
-/* ====================== PROCESO PRINCIPAL ====================== */
+/* ====================== PROCESO PRINCIPAL CON MULTI-TIER ====================== */
 const createUserAndIssueProcess = async ({ 
   business_id, 
   name, 
@@ -112,9 +95,6 @@ const createUserAndIssueProcess = async ({
   points,
   variant,
   cardType,
-  stripsRequired = 10,
-  rewardTitle,
-  rewardDescription,
   colors,
   barcode,
   tier,
@@ -136,18 +116,6 @@ const createUserAndIssueProcess = async ({
     throw err;
   }
 
-  //console.log('[createUserAndIssue] Tipo de tarjeta determinado:', {
-  //  input_variant: variant,
-  //  input_cardType: cardType,
-  //  final_cardType: finalCardType
-  //});
-
-  if (finalCardType === 'strips' && !rewardTitle) {
-    const err = new Error('rewardTitle es obligatorio para tarjetas de strips');
-    err.statusCode = 400;
-    throw err;
-  }
-
   /* ====== 2. VALIDACIONES DE NEGOCIO Y DISEÑO ====== */
   const biz = await ensureBusiness(business_id);
   const design = await pickDesign(business_id, card_detail_id);
@@ -162,7 +130,46 @@ const createUserAndIssueProcess = async ({
     throw err;
   }
 
-  /* ====== 3. IDENTIFICADORES DEL PASE ====== */
+  /* ====== 3. OBTENER CONFIGURACIÓN DE REWARDS DESDE design_json ====== */
+  const { getRewardSystemConfig } = require('../services/carddetailService');
+  const rewardConfig = await getRewardSystemConfig(design.id);
+  
+  console.log('[createUserAndIssue] Configuración de rewards:', {
+    type: rewardConfig?.type,
+    cardType: finalCardType
+  });
+  
+  // Valores efectivos según el tipo de sistema
+  let effectiveStripsRequired = 10;
+  let effectiveRewardTitle = 'Recompensa';
+  let effectiveRewardDescription = null;
+  let isMultiTier = false;
+  
+  if (finalCardType === 'strips' && rewardConfig) {
+    if (rewardConfig.type === 'single') {
+      // Sistema single: un solo premio
+      effectiveStripsRequired = rewardConfig.single.strips_required;
+      effectiveRewardTitle = rewardConfig.single.reward_title;
+      effectiveRewardDescription = rewardConfig.single.reward_description;
+      isMultiTier = false;
+      
+    } else if (rewardConfig.type === 'multi-tier') {
+      // Sistema multi-tier: usar el primer premio como inicial
+      const firstReward = rewardConfig.multiTier.rewards[0];
+      effectiveStripsRequired = firstReward.strips_required;
+      effectiveRewardTitle = firstReward.title;
+      effectiveRewardDescription = firstReward.description;
+      isMultiTier = true;
+      
+      console.log('[createUserAndIssue] Multi-tier habilitado:', {
+        totalLevels: rewardConfig.multiTier.rewards.length,
+        firstReward: firstReward.title,
+        stripsRequired: effectiveStripsRequired
+      });
+    }
+  }
+
+  /* ====== 4. IDENTIFICADORES DEL PASE ====== */
   const serial_number = crypto.randomUUID();
   const apple_auth_token = crypto.randomBytes(16).toString('hex');
   
@@ -174,6 +181,7 @@ const createUserAndIssueProcess = async ({
 
   const loyalty_account_id = `CARD-${business_id}-${serial_number.slice(0, 8).toUpperCase()}`;
 
+  // Validar longitudes
   const assertLen = (v, n, field) => {
     if (v != null && String(v).length > n) {
       const err = new Error(`${field} demasiado largo (${String(v).length} > ${n})`);
@@ -187,7 +195,7 @@ const createUserAndIssueProcess = async ({
   assertLen(apple_pass_type_id, 255, 'apple_pass_type_id');
   assertLen(loyalty_account_id, 64, 'loyalty_account_id');
 
-  /* ====== 4. PREPARAR DATOS PARA CREAR USUARIO ====== */
+  /* ====== 5. PREPARAR DATOS PARA CREAR USUARIO ====== */
   const initial_points = finalCardType === 'points' ? (points || 0) : 0;
 
   const userData = {
@@ -207,50 +215,53 @@ const createUserAndIssueProcess = async ({
 
   if (finalCardType === 'strips') {
     userData.strips_collected = 0;
-    userData.strips_required = stripsRequired || 10;
-    userData.reward_title = rewardTitle;
-    userData.reward_description = rewardDescription || null;
+    userData.strips_required = effectiveStripsRequired;
+    userData.reward_title = effectiveRewardTitle;
+    userData.reward_description = effectiveRewardDescription;
     userData.reward_unlocked = false;
   }
 
-  //console.log('[createUserAndIssue] userData preparado:', {
-  //  card_type: userData.card_type,
-  //  strips_required: userData.strips_required,
-  //  reward_title: userData.reward_title,
-  //  points: userData.points
-  //});
+  console.log('[createUserAndIssue] userData preparado:', {
+    card_type: userData.card_type,
+    strips_required: userData.strips_required,
+    reward_title: userData.reward_title,
+    is_multi_tier: isMultiTier
+  });
 
-  /* ====== 5. CREAR USUARIO EN BD ====== */
+  /* ====== 6. CREAR USUARIO EN BD ====== */
   const user = await usersService.createUser(userData);
   
-  //console.log('[createUserAndIssue] Usuario creado:', { 
-  //  id: user.id, 
-  //  email: user.email, 
-  //  card_type: user.card_type,
-  //  strips_required: user.strips_required,
-  //  points: user.points
-  //});
+  console.log('[createUserAndIssue] Usuario creado:', { 
+    id: user.id, 
+    email: user.email, 
+    card_type: user.card_type,
+    strips_required: user.strips_required,
+    is_multi_tier: isMultiTier
+  });
 
   if (finalCardType === 'strips' && !user.card_type) {
-    //console.error('[CRITICAL] Usuario creado sin card_type, revisar usersService.createUser');
+    console.error('[CRITICAL] Usuario creado sin card_type, revisar usersService.createUser');
   }
 
-  /* ====== 6. EMITIR WALLETS ====== */
-  
-  // 6.1) Google Wallet - CORREGIDO CON JWT (más confiable)
-  //console.log('[createUserAndIssue] Creando Google Wallet:', {
-  //  cardCode: serial_number,
-  //  variant: finalCardType,
-  //  strips_collected: finalCardType === 'strips' ? 0 : undefined,
-  //  strips_required: finalCardType === 'strips' ? (userData.strips_required || 10) : undefined
-  //});
+  /* ====== 7. CALCULAR NIVEL ACTUAL (SI ES MULTI-TIER) ====== */
+  let tierInfo = null;
+  if (isMultiTier && rewardConfig.type === 'multi-tier') {
+    const { calculateCurrentTier } = require('../services/usersService');
+    tierInfo = calculateCurrentTier(user, rewardConfig.multiTier);
+    
+    console.log('[createUserAndIssue] Tier calculado:', {
+      currentLevel: tierInfo.currentLevel,
+      totalLevels: tierInfo.totalLevels,
+      progress: `${tierInfo.stripsInCurrentTier}/${tierInfo.stripsRequiredForCurrentTier}`
+    });
+  }
 
+  /* ====== 8. EMITIR GOOGLE WALLET ====== */
   let google_save_url = null;
   let googleObjectId = null;
   
   try {
-    // MÉTODO 1: Intentar con REST API primero (permite actualizaciones)
-    //console.log('[createUserAndIssue] Intentando REST API...');
+    console.log('[createUserAndIssue] Intentando REST API...');
     
     const googleResult = await createGoogleWalletObject({
       cardCode: serial_number,
@@ -263,8 +274,8 @@ const createUserAndIssueProcess = async ({
       tier: tier || (finalCardType === 'points' ? 'Bronce' : undefined),
       since: since || new Date().toISOString().slice(0, 10),
       strips_collected: finalCardType === 'strips' ? 0 : undefined,
-      strips_required: finalCardType === 'strips' ? (userData.strips_required || 10) : undefined,
-      reward_title: finalCardType === 'strips' ? userData.reward_title : undefined,
+      strips_required: finalCardType === 'strips' ? effectiveStripsRequired : undefined,
+      reward_title: finalCardType === 'strips' ? effectiveRewardTitle : undefined,
       isComplete: false,
       colors: colors || {
         background: design.background_color || biz.background_color || '#2d3436',
@@ -276,20 +287,15 @@ const createUserAndIssueProcess = async ({
     googleObjectId = googleResult.objectId;
     google_save_url = `https://pay.google.com/gp/v/save/${encodeURIComponent(googleObjectId)}`;
     
-    //console.log('[createUserAndIssue] ✓ Google Wallet REST API exitoso:', {
-    //  objectId: googleObjectId,
-    //  url: google_save_url,
-    //  existed: googleResult.existed
-    //});
+    console.log('[createUserAndIssue] ✓ Google Wallet REST API exitoso');
     
   } catch (restApiError) {
-    //console.error('[createUserAndIssue] ❌ REST API falló:', {
-    //  message: restApiError.message,
-    //  stack: restApiError.stack?.split('\n').slice(0, 3).join('\n')
-    //});
+    console.error('[createUserAndIssue] ❌ REST API falló:', {
+      message: restApiError.message
+    });
     
-    // MÉTODO 2: Fallback a JWT (más confiable pero no permite actualizaciones)
-    //console.log('[createUserAndIssue] 🔄 Intentando fallback con JWT...');
+    // Fallback a JWT
+    console.log('[createUserAndIssue] 🔄 Intentando fallback con JWT...');
     
     try {
       google_save_url = await issueGoogleWalletLink({
@@ -302,8 +308,8 @@ const createUserAndIssueProcess = async ({
         tier: tier || (finalCardType === 'points' ? 'Bronce' : undefined),
         since: since || new Date().toISOString().slice(0, 10),
         strips_collected: finalCardType === 'strips' ? 0 : undefined,
-        strips_required: finalCardType === 'strips' ? (userData.strips_required || 10) : undefined,
-        reward_title: finalCardType === 'strips' ? userData.reward_title : undefined,
+        strips_required: finalCardType === 'strips' ? effectiveStripsRequired : undefined,
+        reward_title: finalCardType === 'strips' ? effectiveRewardTitle : undefined,
         isComplete: false,
         colors: colors || {
           background: design.background_color || biz.background_color || '#2d3436',
@@ -312,30 +318,22 @@ const createUserAndIssueProcess = async ({
         barcode: barcode || { type: 'qr' }
       });
       
-      //console.log('[createUserAndIssue] ✓ JWT fallback exitoso:', {
-      //  url: google_save_url,
-      //  method: 'jwt'
-      //});
+      console.log('[createUserAndIssue] ✓ JWT fallback exitoso');
       
     } catch (jwtError) {
-      //console.error('[createUserAndIssue] ❌ JWT fallback también falló:', {
-      //  message: jwtError.message
-      //});
+      console.error('[createUserAndIssue] ❌ JWT fallback también falló:', {
+        message: jwtError.message
+      });
       google_save_url = null;
     }
   }
 
-  // 6.2) Apple Wallet - URL para obtener el .pkpass
+  /* ====== 9. APPLE WALLET URL ====== */
   const base = process.env.PUBLIC_BASE_URL || process.env.WALLET_BASE_URL || '';
   const typeId = process.env.PASS_TYPE_IDENTIFIER;
   const apple_pkpass_url = `${base}/api/v1/wallets/v1/passes/${encodeURIComponent(typeId)}/${serial_number}`;
 
-  //console.log('[createUserAndIssue] URLs generadas:', {
-  //  google: google_save_url ? '✓' : '✗',
-  //  apple: apple_pkpass_url ? '✓' : '✗'
-  //});
-
-  /* ====== 7. GUARDAR URL DE GOOGLE WALLET ====== */
+  /* ====== 10. GUARDAR URL DE GOOGLE WALLET ====== */
   if (google_save_url) {
     try {
       await usersService.saveUserWallet({
@@ -344,17 +342,15 @@ const createUserAndIssueProcess = async ({
         wallet_url: google_save_url,
         google_object_id: googleObjectId
       });
-      //console.log('[createUserAndIssue] ✓ Google Wallet URL guardada');
+      console.log('[createUserAndIssue] ✓ Google Wallet URL guardada');
     } catch (saveError) {
-      //console.error('[createUserAndIssue] ⚠️ Error guardando wallet URL:', saveError.message);
+      console.error('[createUserAndIssue] ⚠️ Error guardando wallet URL:', saveError.message);
     }
   } else {
-    //console.warn('[createUserAndIssue] ⚠️ No se pudo crear Google Wallet, solo disponible Apple Wallet');
+    console.warn('[createUserAndIssue] ⚠️ No se pudo crear Google Wallet, solo disponible Apple Wallet');
   }
 
-  /* ====== 8. CONSTRUIR RESPUESTA CON PWA ====== */
-  
-  //  NUEVO: Construir URLs de PWA
+  /* ====== 11. CONSTRUIR RESPUESTA CON PWA ====== */
   const pwaUrls = pwaWalletService.buildPwaUrls(serial_number);
   
   const response = {
@@ -369,51 +365,73 @@ const createUserAndIssueProcess = async ({
       serial_number,
       apple_auth_token,
       apple_pass_type_id,
-      card_detail_id: design.id,
       loyalty_account_id,
       card_type: finalCardType,
       variant: finalCardType
     },
     wallet: {
-      // Wallets nativos
       google_save_url: google_save_url || null,
       google_object_id: googleObjectId || null,
       apple_pkpass_url,
       apple_auth_header: `ApplePass ${apple_auth_token}`,
       google_method: google_save_url ? (googleObjectId ? 'rest_api' : 'jwt') : null,
-      
-      //  NUEVO: PWA (funciona en todos los dispositivos)
       pwa_wallet_url: pwaUrls.pwa,
       pwa_install_url: pwaUrls.install,
       pwa_share_url: pwaUrls.share
     }
   };
 
+  /* ====== 12. AGREGAR INFO DE STRIPS Y MULTI-TIER ====== */
   if (finalCardType === 'strips') {
     response.user.strips_collected = user.strips_collected || 0;
-    response.user.strips_required = user.strips_required || stripsRequired || 10;
-    response.user.reward_title = user.reward_title || rewardTitle;
-    response.user.reward_description = user.reward_description || rewardDescription;
+    response.user.strips_required = user.strips_required;
+    response.user.reward_title = user.reward_title;
+    response.user.reward_description = user.reward_description;
     
+    // Info básica de strips
     response.strips_info = {
-      required: user.strips_required || stripsRequired || 10,
+      required: user.strips_required,
       collected: user.strips_collected || 0,
-      reward: user.reward_title || rewardTitle,
+      reward: user.reward_title,
       isComplete: false
     };
+    
+    //  INFO DE MULTI-TIER (si aplica)
+    if (isMultiTier && rewardConfig) {
+      response.reward_system = {
+        type: 'multi-tier',
+        enabled: true,
+        total_levels: rewardConfig.multiTier.rewards.length,
+        all_rewards: rewardConfig.multiTier.rewards,
+        current_tier: tierInfo
+      };
+    } else if (rewardConfig?.type === 'single') {
+      // Sistema single
+      response.reward_system = {
+        type: 'single',
+        enabled: true,
+        strips_required: effectiveStripsRequired,
+        reward_title: effectiveRewardTitle,
+        reward_description: effectiveRewardDescription
+      };
+    }
+    
   } else {
+    // Tarjeta de puntos
     if (tier) response.user.tier = tier;
     if (since) response.user.since = since;
   }
 
-  //console.log('[createUserAndIssue]  Proceso completado:', {
-  //  userId: user.id,
-  //  cardType: finalCardType,
-  //  hasGoogleUrl: !!google_save_url,
-  //  hasAppleUrl: !!apple_pkpass_url,
-  //  hasPwaUrl: !!pwaUrls.pwa, //  Nuevo
-  //  googleObjectId: googleObjectId || 'N/A'
-  //});
+  console.log('[createUserAndIssue] ✓ Proceso completado:', {
+    userId: user.id,
+    cardType: finalCardType,
+    rewardSystemType: rewardConfig?.type || 'none',
+    isMultiTier,
+    currentLevel: tierInfo?.currentLevel,
+    hasGoogleUrl: !!google_save_url,
+    hasAppleUrl: !!apple_pkpass_url,
+    hasPwaUrl: !!pwaUrls.pwa
+  });
 
   return response;
 };
@@ -439,12 +457,6 @@ const changeUserDesignProcess = async ({ user_id, card_detail_id }) => {
     updated_at: new Date()
   });
 
-  ////console.log('[changeUserDesign] Diseño actualizado:', {
-  //  userId: user.id,
-  //  oldDesignId: user.card_detail_id,
-  //  newDesignId: design.id
-  //});
-
   return true;
 };
 
@@ -452,13 +464,3 @@ module.exports = {
   createUserAndIssueProcess,
   changeUserDesignProcess
 };
-
-/* ====================== CHANGELOG PWA ====================== 
-
-CAMBIOS REALIZADOS (4 líneas):
-1. Línea ~15: Agregado import de pwaWalletService
-2. Línea ~335: Construcción de URLs PWA con buildPwaUrls()
-3. Líneas ~350-352: Agregadas 3 propiedades en response.wallet
-4. Línea ~373: Actualizado log final con hasPwaUrl
-
-*/

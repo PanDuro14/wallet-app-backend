@@ -69,6 +69,35 @@ async function getEmail(email) {
 const getCurrentDesignById = async (id) => businessService.getCurrentDesignById(id);
 const updateCurrentDesignById = async (designId, businessId) => businessService.updateCurrentDesignById(designId, businessId);
 
+
+const deleteAllClientsByBusiness = async(business_id) => {
+  return businessService.deleteAllClientsByBusiness(business_id); 
+}
+
+const deleteOneClientByBusiness = async(id, business_id) => {
+  try {
+    // Validar IDs
+    const userId = Number.parseInt(String(id).trim(), 10);
+    const businessId = Number.parseInt(String(business_id).trim(), 10);
+    
+    if (!Number.isFinite(userId) || !Number.isFinite(businessId)) {
+      throw new Error('IDs inválidos: deben ser números enteros');
+    }
+    
+    if (userId <= 0 || businessId <= 0) {
+      throw new Error('IDs deben ser positivos');
+    }
+    
+    return await businessService.deleteOneClientByBusiness(userId, businessId);
+  } catch (error) {
+    throw new Error(`Error al eliminar usuario: ${error.message}`);
+  }
+}
+
+const deleteAllCardDetailsByBusiness = async(business_id) =>{
+  return businessService.deleteAllCardDetailsByBusiness(business_id); 
+}
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -78,5 +107,8 @@ module.exports = {
   deleteBusiness,
   getEmail,
   getCurrentDesignById,
-  updateCurrentDesignById
+  updateCurrentDesignById, 
+  deleteAllClientsByBusiness, 
+  deleteOneClientByBusiness, 
+  deleteAllCardDetailsByBusiness
 };

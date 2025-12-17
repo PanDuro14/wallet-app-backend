@@ -267,6 +267,49 @@ const setDefaultDesign = async (req, res) => {
   }
 };
 
+
+
+
+const deleteOneClientByBusiness = async(req, res) => {
+  try {
+    const { businessId, userId } = req.params;
+    
+    // Validar que existan los parámetros
+    if (!businessId || !userId) {
+      return res.status(400).json({ 
+        error: 'businessId y userId son requeridos' 
+      });
+    }
+    
+    // Ejecutar eliminación
+    const result = await businessesProcess.deleteOneClientByBusiness(userId, businessId);
+    
+    return res.status(200).json(result);
+    
+  } catch (error) {
+    console.error('[deleteOneClientByBusiness] Error:', error.message);
+    
+    // Errores específicos
+    if (error.message.includes('no encontrado') || error.message.includes('no pertenece')) {
+      return res.status(404).json({ 
+        error: error.message 
+      });
+    }
+    
+    if (error.message.includes('inválidos')) {
+      return res.status(400).json({ 
+        error: error.message 
+      });
+    }
+    
+    // Error genérico
+    return res.status(500).json({ 
+      error: 'Error al eliminar el usuario',
+      details: error.message 
+    });
+  }
+}
+
 module.exports = {
   loginBusiness,
   getAllBusinesses,
@@ -278,5 +321,7 @@ module.exports = {
   getCurrentDesignById, 
   updateCurrentDesingById,
   createBusinessWithDesign, 
-  setDefaultDesign
+  setDefaultDesign, 
+  deleteOneClientByBusiness
+  
 };

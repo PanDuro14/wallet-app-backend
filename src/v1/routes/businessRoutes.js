@@ -30,5 +30,6 @@ router
   .delete('/:id', businessController.deleteBusiness)
   .get('/current-desing/:id', businessController.getCurrentDesignById)
   .put('/:id/default', businessController.updateCurrentDesingById)
+  .delete('/:businessId/users/:userId', businessController.deleteOneClientByBusiness);
 
 module.exports = router;

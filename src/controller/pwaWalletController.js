@@ -102,25 +102,26 @@ const addStampAdmin = async (req, res) => {
       isComplete
     );
 
-    // ✅ Enviar notificación con businessId
     try {
       if (isComplete) {
         await notificationService.sendCompletionNotification(
           serial,
           card.id,
           'strips',
-          card.business_id, // ← AGREGAR businessId
+          card.business_id, 
           card.lang || 'es'
         );
+        console.log(' [addStampAdmin] Notificacion isComlete true: enviada ')
       } else {
         await notificationService.sendStripsUpdateNotification(
           serial,
           card.id,
           newStripsCollected,
           requiredStrips,
-          card.business_id, // ← AGREGAR businessId
+          card.business_id, 
           card.lang || 'es'
         );
+        console.log(' [addStampAdmin] Notificacion isComplete false: enviada'); 
       }
     } catch (notifError) {
       console.error('[addStampAdmin] Error notificación:', notifError.message);
