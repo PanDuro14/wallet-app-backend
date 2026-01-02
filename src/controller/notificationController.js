@@ -34,7 +34,7 @@ const subscribe = async (req, res) => {
   try {
     const { userId, subscription } = req.body;
 
-    console.log('[subscribe] 📥 Request recibido:', {
+    console.log('[subscribe] Request recibido:', {
       userId,
       hasSubscription: !!subscription,
       endpoint: subscription?.endpoint?.substring(0, 50)
@@ -42,21 +42,21 @@ const subscribe = async (req, res) => {
 
     // Validaciones
     if (!userId) {
-      console.error('[subscribe] ❌ userId faltante');
+      console.error('[subscribe] userId faltante');
       return res.status(400).json({
         error: 'userId es requerido'
       });
     }
 
     if (!subscription || !subscription.endpoint) {
-      console.error('[subscribe] ❌ subscription inválida');
+      console.error('[subscribe] subscription inválida');
       return res.status(400).json({
         error: 'subscription inválida'
       });
     }
 
-    console.log('[subscribe] ✅ Validaciones OK');
-    console.log('[subscribe] 📝 Nueva subscripción:', {
+    console.log('[subscribe] Validaciones OK');
+    console.log('[subscribe] Nueva subscripción:', {
       userId,
       endpoint: subscription.endpoint.substring(0, 50) + '...'
     });
@@ -65,14 +65,14 @@ const subscribe = async (req, res) => {
     const subscriptionJson = JSON.stringify(subscription);
 
     // Verificar si ya existe
-    console.log('[subscribe] 🔍 Verificando si existe...');
+    console.log('[subscribe] Verificando si existe...');
     const existing = await db.query(
       'SELECT id FROM push_subscriptions WHERE user_id = $1',
       [userId]
     );
 
     if (existing.rows.length > 0) {
-      console.log('[subscribe] ℹ️ Subscripción existe, actualizando...');
+      console.log('[subscribe] Subscripción existe, actualizando...');
       
       await db.query(
         `UPDATE push_subscriptions 
@@ -81,7 +81,7 @@ const subscribe = async (req, res) => {
         [subscriptionJson, userId]
       );
 
-      console.log('[subscribe] ✅ Subscripción actualizada:', existing.rows[0].id);
+      console.log('[subscribe] Subscripción actualizada:', existing.rows[0].id);
 
       return res.json({
         success: true,
@@ -91,7 +91,7 @@ const subscribe = async (req, res) => {
     }
 
     // Insertar nueva subscripción
-    console.log('[subscribe] 📝 Insertando nueva subscripción...');
+    console.log('[subscribe] Insertando nueva subscripción...');
     const result = await db.query(
       `INSERT INTO push_subscriptions (user_id, subscription, created_at, updated_at)
        VALUES ($1, $2, NOW(), NOW())
@@ -99,7 +99,7 @@ const subscribe = async (req, res) => {
       [userId, subscriptionJson]
     );
 
-    console.log('[subscribe] ✅ Subscripción guardada:', result.rows[0].id);
+    console.log('[subscribe] Subscripción guardada:', result.rows[0].id);
 
     res.json({
       success: true,
@@ -108,7 +108,7 @@ const subscribe = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[subscribe] ❌ Error guardando subscripción:', error);
+    console.error('[subscribe] Error guardando subscripción:', error);
     console.error('[subscribe] Stack:', error.stack);
     
     res.status(500).json({
@@ -139,7 +139,7 @@ const unsubscribe = async (req, res) => {
       [userId]
     );
 
-    console.log('[unsubscribe] ✅ Eliminadas:', result.rows.length);
+    console.log('[unsubscribe] Eliminadas:', result.rows.length);
 
     res.json({
       success: true,
@@ -148,7 +148,7 @@ const unsubscribe = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[unsubscribe] ❌ Error eliminando subscripciones:', error);
+    console.error('[unsubscribe] Error eliminando subscripciones:', error);
     
     res.status(500).json({
       error: 'Error eliminando subscripciones',
@@ -175,14 +175,14 @@ async function verifySubscription(req, res) {
     );
 
     if (result.rows.length > 0) {
-      console.log(`[verifySubscription] ✅ Usuario ${userId} tiene ${result.rows.length} subscription(s)`);
+      console.log(`[verifySubscription] Usuario ${userId} tiene ${result.rows.length} subscription(s)`);
       return res.json({
         exists: true,
         count: result.rows.length,
         subscriptions: result.rows
       });
     } else {
-      console.log(`[verifySubscription] ⚠️ Usuario ${userId} no tiene subscripciones`);
+      console.log(`[verifySubscription] Usuario ${userId} no tiene subscripciones`);
       return res.json({
         exists: false,
         count: 0
@@ -190,7 +190,7 @@ async function verifySubscription(req, res) {
     }
 
   } catch (error) {
-    console.error('[verifySubscription] ❌ Error:', error);
+    console.error('[verifySubscription] Error:', error);
     return res.status(500).json({
       error: 'Error verificando subscripción',
       details: error.message
@@ -448,8 +448,8 @@ const testVapid = (req, res) => {
     configured: allValid,
     details: status,
     recommendation: allValid 
-      ? '✅ VAPID configuradas correctamente' 
-      : '❌ Regenera VAPID keys'
+      ? ' VAPID configuradas correctamente' 
+      : ' Regenera VAPID keys'
   });
 };
 

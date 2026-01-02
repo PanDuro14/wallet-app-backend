@@ -89,7 +89,7 @@ function scheduleCompletionChecks() {
   
   // Ejecutar diariamente a las 8:00 PM
   cron.schedule('0 20 * * *', async () => {
-    console.log('🎉 [Cron] Verificando colecciones completadas...');
+    console.log(' [Cron] Verificando colecciones completadas...');
     
     try {
       // Query para encontrar usuarios que completaron hoy
@@ -139,7 +139,7 @@ function startAllCronJobs() {
     return;
   }
   
-  console.log('🚀 Iniciando cron jobs de notificaciones...');
+  console.log(' Iniciando cron jobs de notificaciones...');
   
   scheduleInactivityReminders();
   scheduleCompletionChecks();

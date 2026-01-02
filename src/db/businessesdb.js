@@ -127,12 +127,12 @@ const updateBusiness = async (id, updates = {}) => {
         // Agregar campos si están presentes
         if (updates.name) {
           addField('name', updates.name);
-          console.log('[updateBusiness] ✓ Actualizando nombre:', updates.name);
+          console.log('[updateBusiness] Actualizando nombre:', updates.name);
         }
 
         if (updates.email) {
           addField('email', updates.email.toLowerCase());
-          console.log('[updateBusiness] ✓ Actualizando email:', updates.email);
+          console.log('[updateBusiness] Actualizando email:', updates.email);
         }
 
         // Password requiere hashing
@@ -140,22 +140,22 @@ const updateBusiness = async (id, updates = {}) => {
           const salt = await bcrypt.genSalt(10);
           const hashedPassword = await bcrypt.hash(updates.password, salt);
           addField('password', hashedPassword);
-          console.log('[updateBusiness] ✓ Actualizando password (hasheada)');
+          console.log('[updateBusiness] Actualizando password (hasheada)');
         }
 
         if (updates.logo) {
           addField('logo', updates.logo);
-          console.log('[updateBusiness] ✓ Actualizando logo:', updates.logo.length, 'bytes');
+          console.log('[updateBusiness] Actualizando logo:', updates.logo.length, 'bytes');
         }
 
         if (updates.strip_image_on) {
           addField('strip_image_on', updates.strip_image_on);
-          console.log('[updateBusiness] ✓ Actualizando strip_image_on:', updates.strip_image_on.length, 'bytes');
+          console.log('[updateBusiness] Actualizando strip_image_on:', updates.strip_image_on.length, 'bytes');
         }
 
         if (updates.strip_image_off) {
           addField('strip_image_off', updates.strip_image_off);
-          console.log('[updateBusiness] ✓ Actualizando strip_image_off:', updates.strip_image_off.length, 'bytes');
+          console.log('[updateBusiness] Actualizando strip_image_off:', updates.strip_image_off.length, 'bytes');
         }
 
         // Siempre actualizar updated_at
@@ -163,7 +163,7 @@ const updateBusiness = async (id, updates = {}) => {
 
         // 3. Verificar que hay algo que actualizar
         if (fieldsToUpdate.length === 1) { // Solo tiene updated_at
-          console.log('[updateBusiness] ⚠️ No hay campos para actualizar (solo updated_at)');
+          console.log('[updateBusiness] No hay campos para actualizar (solo updated_at)');
           return resolve(currentBusiness);
         }
 
@@ -193,7 +193,7 @@ const updateBusiness = async (id, updates = {}) => {
             return reject(new Error('No se pudo actualizar el negocio'));
           }
 
-          console.log('[updateBusiness] ✅ Negocio actualizado exitosamente');
+          console.log('[updateBusiness] Negocio actualizado exitosamente');
           resolve(results.rows[0]);
         });
       });

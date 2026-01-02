@@ -27,7 +27,7 @@ const createUserAndIssue = async (req, res) => {
       points,
       tier,
       since,
-      // ❌ DEPRECATED: Ya no son obligatorios (se obtienen del design_json)
+      // DEPRECATED: Ya no son obligatorios (se obtienen del design_json)
       stripsRequired,
       rewardTitle,
       rewardDescription,
@@ -58,7 +58,7 @@ const createUserAndIssue = async (req, res) => {
       });
     }
 
-    // ✅ NUEVO: Ya NO validar rewardTitle aquí
+    // NUEVO: Ya NO validar rewardTitle aquí
     // La configuración viene del design_json del card_detail
     console.log('[createUserAndIssue] Request:', {
       business_id,
@@ -90,7 +90,7 @@ const createUserAndIssue = async (req, res) => {
       tier: finalVariant === 'points' ? tier : undefined,
       since: finalVariant === 'points' ? since : undefined,
       
-      // ✅ Parámetros de strips (OPCIONALES - se usan solo si no hay design_json)
+      // Parámetros de strips (OPCIONALES - se usan solo si no hay design_json)
       stripsRequired: finalVariant === 'strips' && isFinite(Number(stripsRequired))
         ? Number(stripsRequired)
         : undefined,
@@ -142,7 +142,7 @@ const createUserAndIssueStrips = async (req, res) => {
       });
     }
 
-    // ✅ ACTUALIZADO: Solo validar rewardTitle si NO hay card_detail_id
+    // ACTUALIZADO: Solo validar rewardTitle si NO hay card_detail_id
     if (!card_detail_id && !rewardTitle) {
       return res.status(400).json({ 
         error: 'rewardTitle es obligatorio cuando no se especifica card_detail_id' 

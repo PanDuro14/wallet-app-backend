@@ -17,9 +17,9 @@ if (!admin.apps.length) {
       })
     });
     
-    console.log('🔥 [Firebase Admin] Inicializado correctamente');
+    console.log(' [Firebase Admin] Inicializado correctamente');
   } catch (error) {
-    console.error('❌ [Firebase Admin] Error al inicializar:', error.message);
+    console.error(' [Firebase Admin] Error al inicializar:', error.message);
   }
 }
 
@@ -40,76 +40,76 @@ const NotificationType = {
 const NotificationTemplates = {
   es: {
     reminder: {
-      title: '¡Te extrañamos! 👋',
+      title: '¡Te extrañamos! ',
       body: 'Hace tiempo que no usas tu tarjeta. ¡Gana más beneficios visitándonos!',
-      icon: '🎁'
+      icon: ''
     },
     update_points: {
-      title: '¡Puntos actualizados! ⭐',
+      title: '¡Puntos actualizados! ',
       body: 'Ahora tienes {points} puntos. ¡Sigue acumulando!',
-      icon: '⭐'
+      icon: ''
     },
     update_strips: {
-      title: '¡Progreso actualizado! 🎫',
+      title: '¡Progreso actualizado! ',
       body: 'Llevas {collected} de {required}. ¡Ya casi completas!',
-      icon: '🎫'
+      icon: ''
     },
     completion_strips: {
-      title: '¡Felicidades! 🎉',
+      title: '¡Felicidades! ',
       body: '¡Completaste tu colección! Tu premio te está esperando.',
-      icon: '🏆'
+      icon: ''
     },
     completion_points: {
-      title: '¡Objetivo alcanzado! 🎯',
+      title: '¡Objetivo alcanzado! ',
       body: '¡Llegaste a {points} puntos! Puedes canjear tu recompensa.',
-      icon: '🎁'
+      icon: ''
     },
     welcome: {
-      title: '¡Bienvenido! 🎉',
+      title: '¡Bienvenido! ',
       body: 'Tu tarjeta está lista. Empieza a acumular beneficios.',
-      icon: '👋'
+      icon: ''
     },
     reward_ready: {
-      title: '¡Premio disponible! 🎁',
+      title: '¡Premio disponible! ',
       body: '{reward_title} está listo para ti. ¡Ven a canjearlo!',
-      icon: '🎁'
+      icon: ''
     }
   },
   en: {
     reminder: {
-      title: 'We miss you! 👋',
+      title: 'We miss you! ',
       body: "It's been a while since you used your card. Earn more benefits!",
-      icon: '🎁'
+      icon: ''
     },
     update_points: {
-      title: 'Points updated! ⭐',
+      title: 'Points updated! ',
       body: 'You now have {points} points. Keep earning!',
-      icon: '⭐'
+      icon: ''
     },
     update_strips: {
-      title: 'Progress updated! 🎫',
+      title: 'Progress updated! ',
       body: 'You have {collected} out of {required}. Almost there!',
-      icon: '🎫'
+      icon: ''
     },
     completion_strips: {
-      title: 'Congratulations! 🎉',
+      title: 'Congratulations! ',
       body: 'You completed your collection! Your reward is waiting.',
-      icon: '🏆'
+      icon: ''
     },
     completion_points: {
-      title: 'Goal achieved! 🎯',
+      title: 'Goal achieved! ',
       body: 'You reached {points} points! Redeem your reward.',
-      icon: '🎁'
+      icon: ''
     },
     welcome: {
-      title: 'Welcome! 🎉',
+      title: 'Welcome! ',
       body: 'Your card is ready. Start earning benefits.',
-      icon: '👋'
+      icon: ''
     },
     reward_ready: {
-      title: 'Reward available! 🎁',
+      title: 'Reward available! ',
       body: '{reward_title} is ready for you. Come get it!',
-      icon: '🎁'
+      icon: ''
     }
   }
 };
@@ -151,11 +151,11 @@ async function sendAppleWalletNotification(serial) {
     const tokens = await listPushTokensBySerial(serial);
     
     if (!tokens || tokens.length === 0) {
-      console.log('[sendAppleWalletNotification] ⚠️ No tokens para serial:', serial);
+      console.log('[sendAppleWalletNotification] No tokens para serial:', serial);
       return { success: false, message: 'No tokens found' };
     }
 
-    console.log(`[sendAppleWalletNotification] 📤 Enviando APNs a ${tokens.length} dispositivo(s)`);
+    console.log(`[sendAppleWalletNotification] Enviando APNs a ${tokens.length} dispositivo(s)`);
 
     //  CRÍTICO: Pasar { serial } como payload para que Apple Wallet actualice
     const results = await Promise.allSettled(
@@ -198,7 +198,7 @@ async function sendAppleWalletNotification(serial) {
       failed
     };
   } catch (error) {
-    console.error('[sendAppleWalletNotification] ❌ Error fatal:', error);
+    console.error('[sendAppleWalletNotification] Error fatal:', error);
     return { success: false, error: error.message };
   }
 }
@@ -279,7 +279,7 @@ async function sendFCMNotification(subscription, message, data) {
   try {
     const token = subscription.endpoint.split('/').pop();
 
-    console.log('[FCM] 🔑 Token:', token.substring(0, 20) + '...');
+    console.log('[FCM] Token:', token.substring(0, 20) + '...');
 
     let iconUrl = 'https://wallet-app-backend.fly.dev/public/WindoeLogo192.png';
     let badgeUrl = 'https://wallet-app-backend.fly.dev/public/WindoeLogo192.png';
@@ -287,7 +287,7 @@ async function sendFCMNotification(subscription, message, data) {
     if (data.businessId) {
       iconUrl = `https://wallet-app-backend.fly.dev/api/public/assets/logo/${data.businessId}`;
       badgeUrl = `https://wallet-app-backend.fly.dev/api/public/assets/logo/${data.businessId}`;
-      console.log('[FCM] 🎨 Usando logo del negocio:', data.businessId);
+      console.log('[FCM] Usando logo del negocio:', data.businessId);
     }
 
     const payload = {
@@ -322,15 +322,15 @@ async function sendFCMNotification(subscription, message, data) {
       }
     };
 
-    console.log('[FCM] 📤 Enviando con Admin SDK...');
+    console.log('[FCM] Enviando con Admin SDK...');
     
     const result = await admin.messaging().send(payload);
-    console.log('[FCM] ✅ Enviado:', result);
+    console.log('[FCM] Enviado:', result);
     
     return { success: true, messageId: result };
 
   } catch (error) {
-    console.error('[FCM] ❌ Error:', error.message);
+    console.error('[FCM] Error:', error.message);
     throw error;
   }
 }
@@ -344,9 +344,9 @@ async function removeExpiredSubscription(subscription) {
       'DELETE FROM push_subscriptions WHERE subscription = $1',
       [subscription]
     );
-    console.log('[removeExpiredSubscription] ✅ Subscription eliminada');
+    console.log('[removeExpiredSubscription] Subscription eliminada');
   } catch (error) {
-    console.error('[removeExpiredSubscription] ❌ Error:', error);
+    console.error('[removeExpiredSubscription] Error:', error);
   }
 }
 

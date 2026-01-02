@@ -137,13 +137,14 @@ async function updateRegistrationEnv({ serial, pushToken, env }) {
   await pool.query(sql, [serial, pushToken, env]);
 }
 
-async function grantStripBySerial(serial, stripNumber) {
+async function grantStripBySerial(serial, stripNumber, extraUpdates = {}) {
   await pool.query('BEGIN');
   
   try {
     // 1. Obtener usuario
     const userQuery = `
-      SELECT id, strips_collected, strips_required, reward_title, name, card_type
+      SELECT id, strips_collected, strips_required, reward_title, reward_unlocked, 
+             name, card_type, card_detail_id
       FROM public.users 
       WHERE serial_number = $1
     `;
@@ -176,15 +177,16 @@ async function grantStripBySerial(serial, stripNumber) {
       };
     }
 
-    // 3. Verificar si ya completó
-    if (user.strips_collected >= (user.strips_required || 10)) {
+    // 3. Verificar si ya completó (último tier)
+    if (user.reward_unlocked) {
       await pool.query('ROLLBACK');
       return {
         success: false,
         error: 'Colección ya completada',
         current: {
           strips_collected: user.strips_collected,
-          strips_required: user.strips_required || 10
+          strips_required: user.strips_required || 10,
+          reward_unlocked: true
         }
       };
     }
@@ -195,26 +197,48 @@ async function grantStripBySerial(serial, stripNumber) {
       [user.id, stripNumber]
     );
 
-    // 5. Actualizar contador
+    // 5. Preparar actualización (con soporte para extraUpdates)
+    const newStripsCollected = user.strips_collected + 1;
+    
+    // Valores por defecto
+    let updates = {
+      strips_collected: newStripsCollected,
+      updated_at: new Date()
+    };
+
+    // Merge con extraUpdates (permite cambiar strips_required, reward_title, etc.)
+    if (Object.keys(extraUpdates).length > 0) {
+      console.log('[grantStripBySerial] Aplicando actualizaciones extras:', extraUpdates);
+      updates = { ...updates, ...extraUpdates };
+    }
+
+    // Construir query dinámica
+    const keys = Object.keys(updates);
+    const setClause = keys.map((k, i) => {
+      if (k === 'updated_at') return `${k} = NOW() AT TIME ZONE 'UTC'`;
+      return `${k} = $${i + 2}`;
+    }).join(', ');
+    
+    const values = keys
+      .filter(k => k !== 'updated_at')
+      .map(k => updates[k]);
+
     const updateQuery = `
       UPDATE users 
-      SET strips_collected = strips_collected + 1,
-          reward_unlocked = CASE 
-            WHEN strips_collected + 1 >= COALESCE(strips_required, 10) THEN true 
-            ELSE reward_unlocked 
-          END,
-          updated_at = NOW() AT TIME ZONE 'UTC'
+      SET ${setClause}
       WHERE id = $1 
-      RETURNING strips_collected, strips_required, reward_unlocked, reward_title, name, updated_at
+      RETURNING strips_collected, strips_required, reward_unlocked, 
+                reward_title, reward_description, name, updated_at
     `;
     
-    const updatedResult = await pool.query(updateQuery, [user.id]);
+    const updatedResult = await pool.query(updateQuery, [user.id, ...values]);
     const updated = updatedResult.rows[0];
 
     await pool.query('COMMIT');
     
-    const isComplete = updated.reward_unlocked;
-    const justCompleted = isComplete && (updated.strips_collected === (updated.strips_required || 10));
+    const isComplete = updated.reward_unlocked || false;
+    const justCompleted = isComplete && 
+                          (updated.strips_collected === (updated.strips_required || 10));
 
     return {
       success: true,
@@ -225,6 +249,8 @@ async function grantStripBySerial(serial, stripNumber) {
         isComplete,
         justCompleted,
         reward_title: updated.reward_title,
+        reward_description: updated.reward_description,
+        reward_unlocked: updated.reward_unlocked,
         userName: updated.name,
         updatedAt: updated.updated_at
       }
@@ -275,50 +301,64 @@ async function deleteRegistration({ deviceId, passTypeId, serial, pushToken }) {
 }
 
 // Resetear strips a 0
-async function resetStripsBySerial(serial) {
-  await pool.query('BEGIN');
-  
+const resetStripsBySerial = async (serial, options = {}) => {
   try {
-    // 1. Obtener el user_id
-    const userQuery = 'SELECT id FROM users WHERE serial_number = $1';
-    const userResult = await pool.query(userQuery, [serial]);
-    const userId = userResult.rows[0]?.id;
-    
-    if (!userId) {
-      await pool.query('ROLLBACK');
+    // Valores por defecto o desde options
+    const strips_required = options.strips_required || null;
+    const reward_title = options.reward_title || null;
+    const reward_description = options.reward_description || null;
+
+    let query = `
+      UPDATE users
+      SET strips_collected = 0,
+          reward_unlocked = FALSE,
+          updated_at = NOW()`;
+
+    const params = [serial];
+    let paramIndex = 2;
+
+    // Agregar campos opcionales si se proveen
+    if (strips_required !== null) {
+      query += `, strips_required = $${paramIndex}`;
+      params.push(strips_required);
+      paramIndex++;
+    }
+
+    if (reward_title !== null) {
+      query += `, reward_title = $${paramIndex}`;
+      params.push(reward_title);
+      paramIndex++;
+    }
+
+    if (reward_description !== null) {
+      query += `, reward_description = $${paramIndex}`;
+      params.push(reward_description);
+      paramIndex++;
+    }
+
+    query += `
+      WHERE serial_number = $1
+      RETURNING strips_collected, strips_required, reward_title, reward_unlocked
+    `;
+
+    console.log('[resetStripsBySerial] Query:', query);
+    console.log('[resetStripsBySerial] Params:', params);
+
+    const { rows } = await pool.query(query, params);
+
+    if (rows.length === 0) {
+      console.error('[resetStripsBySerial] Usuario no encontrado');
       return null;
     }
 
-    // 2. Borrar los strips individuales del log
-    await pool.query('DELETE FROM user_strips_log WHERE user_id = $1', [userId]);
+    console.log('[resetStripsBySerial] Reset exitoso:', rows[0]);
+    return rows[0];
 
-    // 3. Resetear contador en users
-    const updateQuery = `
-      UPDATE users
-      SET 
-        strips_collected = 0,
-        reward_unlocked = false,
-        updated_at = NOW()
-      WHERE serial_number = $1
-      RETURNING 
-        id, 
-        serial_number, 
-        strips_collected, 
-        strips_required, 
-        reward_title,
-        updated_at
-    `;
-    
-    const result = await pool.query(updateQuery, [serial]);
-    
-    await pool.query('COMMIT');
-    return result.rows[0] || null;
-    
   } catch (error) {
-    await pool.query('ROLLBACK');
+    console.error('[resetStripsBySerial] Error:', error);
     throw error;
   }
-}
+};
 
 // Guardar historial de colecciones completadas
 async function saveStripCompletionHistory(data) {
@@ -372,6 +412,151 @@ async function countCompletedCycles(serial) {
   return parseInt(result.rows[0]?.total_cycles || 0);
 }
 
+async function clearUserStripsLog(userId) {
+  const sql = 'DELETE FROM user_strips_log WHERE user_id = $1';
+  const result = await pool.query(sql, [userId]);
+  console.log(`[clearUserStripsLog] Eliminados ${result.rowCount} strips del usuario ${userId}`);
+  return result.rowCount;
+}
+
+async function forceUpdateAllStripsPasses() {
+  console.log('\n INICIANDO ACTUALIZACIÓN MASIVA DE PASSES\n');
+  console.log('═══════════════════════════════════════════\n');
+  
+  try {
+    // 1. Obtener todos los passes de strips con tokens
+    const query = `
+      SELECT DISTINCT 
+        u.serial_number,
+        u.name,
+        u.strips_collected,
+        u.strips_required,
+        r.push_token,
+        r.env
+      FROM users u
+      JOIN apple_wallet_registrations r ON r.serial_number = u.serial_number
+      WHERE u.card_type = 'strips'
+      ORDER BY u.name
+    `;
+    
+    const { rows } = await pool.query(query);
+    
+    if (rows.length === 0) {
+      console.log(' No se encontraron passes de strips registrados');
+      return { success: false, message: 'No hay passes para actualizar' };
+    }
+    
+    console.log(` Total de dispositivos a notificar: ${rows.length}\n`);
+    
+    // 2. Importar servicio APNs
+    const { notifyWallet } = require('../services/apnsService');
+    
+    // 3. Agrupar por serial
+    const passesBySerial = {};
+    
+    rows.forEach(row => {
+      if (!passesBySerial[row.serial_number]) {
+        passesBySerial[row.serial_number] = {
+          name: row.name,
+          strips: `${row.strips_collected}/${row.strips_required}`,
+          tokens: []
+        };
+      }
+      passesBySerial[row.serial_number].tokens.push({
+        push_token: row.push_token,
+        env: row.env
+      });
+    });
+    
+    const totalPasses = Object.keys(passesBySerial).length;
+    let successCount = 0;
+    let failCount = 0;
+    let current = 0;
+    
+    console.log(`Total de passes únicos: ${totalPasses}\n`);
+    console.log('Enviando notificaciones APNs...\n');
+    
+    // 4. Enviar APNs a cada pass
+    for (const [serial, data] of Object.entries(passesBySerial)) {
+      current++;
+      const progress = Math.round((current / totalPasses) * 100);
+      
+      process.stdout.write(`[${progress}%] ${current}/${totalPasses} - ${data.name} (${data.strips})...`);
+      
+      let passSuccess = false;
+      
+      for (const token of data.tokens) {
+        try {
+          const result = await notifyWallet(token.push_token, token.env, { serial });
+          
+          if (result.status === 200) {
+            passSuccess = true;
+          } else if (result.status === 410) {
+            // Token expirado, eliminar
+            try {
+              await pool.query(
+                'DELETE FROM apple_wallet_registrations WHERE push_token = $1',
+                [token.push_token]
+              );
+            } catch (e) {
+              // Ignorar
+            }
+          }
+        } catch (error) {
+          // Continuar con siguiente token
+        }
+        
+        // Delay entre notificaciones
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      if (passSuccess) {
+        successCount++;
+        console.log(':D');
+      } else {
+        failCount++;
+        console.log('D:');
+      }
+    }
+    
+    // 5. Actualizar timestamps en DB
+    console.log('\nActualizando timestamps en base de datos...');
+    
+    const updateResult = await pool.query(`
+      UPDATE users 
+      SET updated_at = NOW()
+      WHERE card_type = 'strips'
+      RETURNING id
+    `);
+    
+    console.log(`${updateResult.rowCount} registros actualizados\n`);
+    
+    if (successCount > 0) {
+      console.log('Los passes deberían actualizarse en los próximos minutos');
+      console.log('Los usuarios pueden abrir Apple Wallet para ver los cambios\n');
+    }
+    
+    if (failCount > 0) {
+      console.log('Algunos passes no pudieron ser notificados por APNs');
+      console.log('Se actualizarán automáticamente en las próximas 24 horas\n');
+    }
+    
+    return {
+      success: true,
+      total: totalPasses,
+      successful: successCount,
+      failed: failCount,
+      devices: rows.length
+    };
+    
+  } catch (error) {
+    console.error('\nERROR:', error.message);
+    console.error(error.stack);
+    return { success: false, error: error.message };
+  }
+}
+
+
 module.exports = {
   findUserPassBySerial,
   upsertRegistration,
@@ -385,5 +570,8 @@ module.exports = {
   resetStripsBySerial,
   saveStripCompletionHistory,
   getStripCompletionHistory,
-  countCompletedCycles
+  countCompletedCycles, 
+  clearUserStripsLog, 
+  forceUpdateAllStripsPasses
+
 };

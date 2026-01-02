@@ -9,5 +9,5 @@ const norm = s => {
 ['WWDR.pem','pass-cert.pem','pass-key.pem'].forEach(f=>{
   const p = path.join(dir, f);
   fs.writeFileSync(p, norm(fs.readFileSync(p)), 'utf8');
-  console.log('✔', f, 'normalizado');
+  console.log('', f, 'normalizado');
 });

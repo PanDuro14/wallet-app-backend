@@ -77,7 +77,7 @@ const formatCardResponse = (rawData) => {
   //  programName: designJson.programName
   //});
   
-  // ✅ Extraer colores del design_json (prioridad sobre fallbacks)
+  // Extraer colores del design_json (prioridad sobre fallbacks)
   const backgroundColor = designJson.colors?.background || '#2d3436';
   const foregroundColor = designJson.colors?.foreground || '#E6E6E6';
   const labelColor = designJson.colors?.label || '#FFFFFF';
@@ -221,7 +221,7 @@ const formatStampResponse = (updatedCard) => {
     is_complete: isComplete,
     reward_title: isComplete ? updatedCard.reward_title : null,
     message: isComplete 
-      ? '¡Felicidades! Colección completada 🎉' 
+      ? '¡Felicidades! Colección completada ' 
       : `Sello agregado (${updatedCard.strips_collected}/${updatedCard.strips_required})`
   };
 };

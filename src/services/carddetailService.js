@@ -37,7 +37,7 @@ const getOneCardByBusiness = async(business_id, id) => {
     return cardDetail; 
 }
 
-// ✅ ACTUALIZADO: Validar rewardSystem antes de crear
+// ACTUALIZADO: Validar rewardSystem antes de crear
 const createUnifiedDesign = async (payload) => {
   const { design_json } = payload;
   

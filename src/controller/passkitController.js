@@ -16,7 +16,6 @@ const { createPkPassBuffer } = require('../services/appleWalletService');
 const cardSvc = require('../services/carddetailService');
 const { resolveDesignForUser } = require('../utils/design');
 const notificationService = require('../services/notificationService');
-const stripsProcess = require('../processes/stripsProcess');
 const crypto = require('crypto'); 
 
 // ========== IMPORTACIÓN DEL SERVICIO DE STRIPS ==========
@@ -225,7 +224,218 @@ const bumpPoints = async (req, res) => {
 
 // POST /internal/passes/:serial/grant-strip
 // controllers/passkitController.js
+// ========== HELPER: Single-Tier Grant ==========
+async function handleSingleTierGrant(row, serial) {
+  const currentStrips = row.strips_collected || 0;
+  const requiredStrips = row.strips_required || 10;
 
+  console.log('[handleSingleTierGrant] Strips actuales:', currentStrips, '/', requiredStrips);
+
+  // Si ya está completo, rechazar
+  if (row.reward_unlocked) {
+    console.log('[handleSingleTierGrant] Recompensa ya desbloqueada');
+    throw {
+      status: 400,
+      error: 'collection_complete',
+      message: 'Recompensa ya desbloqueada. Debe canjearse antes de continuar.',
+      data: {
+        strips_collected: currentStrips,
+        strips_required: requiredStrips,
+        reward_unlocked: true
+      }
+    };
+  }
+
+  const newStripsCollected = Math.min(currentStrips + 1, requiredStrips);
+  const isComplete = newStripsCollected >= requiredStrips;
+
+  console.log('[handleSingleTierGrant] Strips:', currentStrips, '→', newStripsCollected);
+
+  // ACTUALIZAR EN DB
+  const result = await grantStripBySerial(serial, newStripsCollected, 
+    isComplete ? { reward_unlocked: true } : {}
+  );
+
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return {
+    strips_collected: newStripsCollected,
+    strips_required: requiredStrips,
+    reward_unlocked: isComplete,
+    isComplete,
+    reward_title: row.reward_title,
+    user: result.data
+  };
+}
+
+// ========== HELPER: Multi-Tier Grant (ACUMULATIVO + RESET LOG) ==========
+async function handleMultiTierGrant(row, serial, rewardConfig) {
+  const usersService = require('../services/usersService');
+  const { clearUserStripsLog } = require('../db/appleWalletdb');
+  
+  const currentStrips = row.strips_collected || 0;
+  const currentRequired = row.strips_required;
+
+  console.log('[handleMultiTierGrant] Estado actual:', {
+    strips_collected: currentStrips,
+    strips_required: currentRequired,
+    reward_unlocked: row.reward_unlocked
+  });
+
+  // Calcular tier actual ANTES de agregar strip
+  const tierInfoBefore = usersService.calculateCurrentTier(
+    { 
+      strips_collected: currentStrips,
+      strips_required: currentRequired, 
+      reward_title: row.reward_title
+    },
+    rewardConfig.multiTier
+  );
+
+  console.log('[handleMultiTierGrant] Tier ANTES:', {
+    currentLevel: tierInfoBefore.currentLevel,
+    totalLevels: tierInfoBefore.totalLevels,
+    stripsRequiredForCurrentTier: tierInfoBefore.stripsRequiredForCurrentTier,
+    isLastTier: tierInfoBefore.isLastTier,
+    currentReward: tierInfoBefore.currentReward.title
+  });
+
+  // Verificar si está en el último tier y ya completado
+  if (tierInfoBefore.isLastTier && row.reward_unlocked) {
+    console.log('[handleMultiTierGrant] Colección completa (último tier)');
+    throw {
+      status: 400,
+      error: 'collection_complete',
+      message: 'Colección completa. Debe canjearse antes de continuar.',
+      data: {
+        strips_collected: currentStrips,
+        strips_required: tierInfoBefore.stripsRequiredForCurrentTier,
+        reward_unlocked: true,
+        currentLevel: tierInfoBefore.currentLevel,
+        totalLevels: tierInfoBefore.totalLevels
+      }
+    };
+  }
+
+  // ACUMULATIVO: Agregar 1 strip sin resetear
+  const newStripsCollected = currentStrips + 1;
+
+  console.log('[handleMultiTierGrant] Agregando strip (acumulativo):', currentStrips, '→', newStripsCollected);
+
+  // Verificar si completó el tier actual
+  const completedCurrentTier = newStripsCollected >= tierInfoBefore.stripsRequiredForCurrentTier;
+
+  // CASO 1: Completó tier pero NO es el último → Avanzar al siguiente
+  if (completedCurrentTier && !tierInfoBefore.isLastTier) {
+    console.log('[handleMultiTierGrant] Tier completado! Avanzando al siguiente...');
+
+    // Obtener siguiente tier
+    const nextTierIndex = tierInfoBefore.currentLevel; // Ya es 1-indexed
+    const nextTier = rewardConfig.multiTier.rewards[nextTierIndex];
+
+    if (!nextTier) {
+      console.error('[handleMultiTierGrant] No se encontró el siguiente tier');
+      throw new Error('Siguiente tier no encontrado');
+    }
+
+    console.log('[handleMultiTierGrant] Siguiente tier:', {
+      level: nextTierIndex + 1,
+      title: nextTier.title,
+      strips_required: nextTier.strips_required
+    });
+
+    // CRÍTICO: LIMPIAR user_strips_log antes de actualizar
+    await clearUserStripsLog(row.id);
+    console.log('[handleMultiTierGrant] Strips log limpiado para nuevo tier');
+
+    // ACTUALIZAR: Otorgar strip #1 del nuevo tier
+    const result = await grantStripBySerial(serial, 1, {
+      strips_required: nextTier.strips_required,
+      reward_title: nextTier.title,
+      reward_description: nextTier.description,
+      reward_unlocked: false
+    });
+
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    return {
+      strips_collected: newStripsCollected,  // ACUMULATIVO (5, 10, 15...)
+      strips_required: nextTier.strips_required,
+      reward_unlocked: false,
+      reward_title: nextTier.title,
+      currentLevel: nextTierIndex + 1,
+      totalLevels: tierInfoBefore.totalLevels,
+      level_completed: true,
+      level_changed: true,
+      previousTier: tierInfoBefore.currentReward.title,
+      nextTier: nextTier.title,
+      message: `¡Tier ${tierInfoBefore.currentLevel} completado! Avanzaste a ${nextTier.title}`,
+      user: result.data,
+      tier_info: {
+        currentLevel: nextTierIndex + 1,
+        totalLevels: tierInfoBefore.totalLevels,
+        currentReward: nextTier,
+        nextReward: rewardConfig.multiTier.rewards[nextTierIndex + 1] || null
+      }
+    };
+  }
+
+  // CASO 2: Actualización normal dentro del tier o completar último tier
+  const isLastTierComplete = tierInfoBefore.isLastTier && 
+                              newStripsCollected >= tierInfoBefore.stripsRequiredForCurrentTier;
+
+  console.log('[handleMultiTierGrant] Actualizando strips dentro del tier:', newStripsCollected);
+  console.log('[handleMultiTierGrant] ¿Último tier completo?', isLastTierComplete);
+
+  //  FIX: Calcular cuántos strips ya tiene en el tier ACTUAL
+  const previousTierLimit = tierInfoBefore.currentLevel === 1 
+    ? 0 
+    : rewardConfig.multiTier.rewards[tierInfoBefore.currentLevel - 2].strips_required;
+
+  //  FIX: El nuevo strip es el siguiente después de los que ya tiene
+  const stripsInCurrentTier = currentStrips - previousTierLimit;
+  const nextStripNumber = stripsInCurrentTier + 1;
+
+  console.log('[handleMultiTierGrant] Strip calculation:', {
+    currentStrips,
+    previousTierLimit,
+    stripsInCurrentTier,
+    nextStripNumber
+  });
+
+  // ACTUALIZAR EN DB
+  const result = await grantStripBySerial(serial, nextStripNumber, 
+    isLastTierComplete ? { reward_unlocked: true } : {}
+  );
+
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return {
+    strips_collected: newStripsCollected,
+    strips_required: tierInfoBefore.stripsRequiredForCurrentTier,
+    reward_unlocked: isLastTierComplete,
+    reward_title: tierInfoBefore.currentReward.title,
+    currentLevel: tierInfoBefore.currentLevel,
+    totalLevels: tierInfoBefore.totalLevels,
+    isComplete: isLastTierComplete,
+    all_levels_completed: isLastTierComplete,
+    user: result.data,
+    tier_info: {
+      currentLevel: tierInfoBefore.currentLevel,
+      totalLevels: tierInfoBefore.totalLevels,
+      currentReward: tierInfoBefore.currentReward,
+      nextReward: null
+    }
+  };
+}
+
+// ========== GRANT STRIP PRINCIPAL ==========
 const grantStrip = async (req, res) => {
   try {
     const serial = cleanUuid(req.params.serial);
@@ -244,21 +454,56 @@ const grantStrip = async (req, res) => {
       return res.status(400).json({ error: 'Esta tarjeta no es de tipo strips' });
     }
 
-    // PASO 1: Actualizar strips en DB
-    console.log('[grantStrip] Delegando a stripsProcess.addStripsToUser');
-    const result = await stripsProcess.addStripsToUser(row.id, 1);
+    console.log('[grantStrip] Iniciando otorgamiento de strip:', {
+      serial,
+      stripNumber,
+      current_strips: row.strips_collected,
+      required_strips: row.strips_required
+    });
+
+    // Obtener configuración del sistema de recompensas
+    const rewardConfig = await cardSvc.getRewardSystemConfig(row.card_detail_id);
     
-    const isComplete = result.all_levels_completed || result.level_completed || result.is_complete;
+    if (!rewardConfig) {
+      return res.status(404).json({ error: 'Configuración de recompensas no encontrada' });
+    }
+
+    const isMultiTier = rewardConfig.type === 'multi-tier';
+    console.log('[grantStrip] Sistema:', isMultiTier ? 'Multi-tier' : 'Single-tier');
+
+    // ===== EJECUTAR HELPER (actualiza DB directamente) =====
+    let result;
+    try {
+      if (isMultiTier) {
+        result = await handleMultiTierGrant(row, serial, rewardConfig);
+      } else {
+        result = await handleSingleTierGrant(row, serial);
+      }
+    } catch (error) {
+      if (error.status === 400) {
+        return res.status(400).json(error.data || { error: error.error, message: error.message });
+      }
+      throw error;
+    }
+
+    console.log('[grantStrip] Resultado:', {
+      strips_collected: result.strips_collected,
+      strips_required: result.strips_required,
+      level_completed: result.level_completed,
+      all_levels_completed: result.all_levels_completed
+    });
+
+    const isComplete = result.all_levels_completed || result.isComplete;
     
-    // PASO 2: PRE-GENERAR imagen ANTES de APNs (CRÍTICO)
+    // ===== PRE-GENERAR IMAGEN ANTES DE APNs =====
     console.log('[grantStrip] Pre-generando imagen de strips...');
     try {
       const brandAssets = await loadBrandAssets(row.business_id);
       
       if (brandAssets.stripImageOn && brandAssets.stripImageOff) {
         const previewImage = await generateStripsImage({
-          collected: result.user.strips_collected,
-          total: result.user.strips_required,
+          collected: result.strips_collected,
+          total: result.strips_required,
           stripImageOn: brandAssets.stripImageOn,
           stripImageOff: brandAssets.stripImageOff,
           cardWidth: 450
@@ -267,37 +512,39 @@ const grantStrip = async (req, res) => {
         console.log('[grantStrip] Imagen pre-generada:', previewImage.length, 'bytes');
       }
     } catch (imgError) {
-      console.error('[grantStrip] ❌ Error pre-generando imagen:', imgError.message);
+      console.error('[grantStrip] Error pre-generando imagen:', imgError.message);
     }
 
-    // PASO 3: Delay para asegurar que la imagen esté lista
     await new Promise(resolve => setTimeout(resolve, 200));
 
-    // PASO 4: ENVIAR SOLO UNA VEZ las notificaciones
-    console.log('[grantStrip] Enviando notificación única...');
+    // ===== ENVIAR NOTIFICACIÓN =====
+    console.log('[grantStrip] Enviando notificación...');
     try {
       if (isComplete) {
         await notificationService.sendCompletionNotification(
           serial, row.id, 'strips', row.lang || 'es'
         ); 
+      } else if (result.level_completed) {
+        await notificationService.sendTierCompletedNotification(
+          serial, row.id, result.previousTier, result.nextTier, row.lang || 'es'
+        );
       } else {
         await notificationService.sendStripsUpdateNotification(
-          serial, row.id, result.user.strips_collected, result.user.strips_required, row.lang || 'es'
+          serial, row.id, result.strips_collected, result.strips_required, row.lang || 'es'
         ); 
       }
       console.log('[grantStrip] Notificación enviada');
     } catch (notifError) {
-      console.error('[grantStrip] ❌ Error notificación:', notifError.message); 
+      console.error('[grantStrip] Error notificación:', notifError.message); 
     }
 
-    // PASO 5: Delay antes de APNs silent push
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // PASO 6: ENVIAR APNs UNA SOLA VEZ
+    // ===== ENVIAR APNs =====
     let notified = 0;
     if (process.env.APNS_ENABLED === 'true') {
       const tokens = await listPushTokensBySerial(serial);
-      console.log('[grantStrip] 📤 Enviando APNs a', tokens.length, 'dispositivo(s)');
+      console.log('[grantStrip] Enviando APNs a', tokens.length, 'dispositivo(s)');
       
       const results = await Promise.allSettled(
         tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
@@ -308,13 +555,7 @@ const grantStrip = async (req, res) => {
         const token = tokens[i].push_token;
         
         if (r.status === 'fulfilled') {
-          const { status, reason } = r.value;
-          console.log('[grantStrip] APNs result:', {
-            token: token.substring(0, 8) + '...',
-            status,
-            reason: reason || 'OK'
-          });
-          
+          const { status } = r.value;
           if (status === 200) notified++;
           
           if (status === 410) {
@@ -332,45 +573,50 @@ const grantStrip = async (req, res) => {
       console.log('[grantStrip] APNs enviados:', notified, '/', tokens.length);
     }
 
-    // RESPUESTA
+    // ===== CONSTRUIR RESPUESTA =====
     const response = { 
       ok: true, 
-      strips_collected: result.user.strips_collected,
-      strips_required: result.user.strips_required,
+      strips_collected: result.strips_collected,
+      strips_required: result.strips_required,
       strip_number: stripNumber,
       isComplete,
-      reward_title: result.user.reward_title,
+      reward_title: result.reward_title,
       userName: row.name,
       notified
     };
 
     if (result.tier_info) {
       response.tier_info = {
-        current_level: result.tier_info.currentLevel,
+        current_level: result.tier_info.currentLevel || result.currentLevel,
         total_levels: result.tier_info.totalLevels,
-        level_changed: result.level_changed,
-        level_completed: result.level_completed,
+        level_changed: result.level_changed || false,
+        level_completed: result.level_completed || false,
         next_reward: result.tier_info.nextReward?.title || null
       };
     }
 
     if (result.all_levels_completed) {
-      response.message = '🌟 ¡Completaste todos los niveles!';
+      response.message = ' ¡Completaste todos los niveles!';
     } else if (result.level_completed) {
-      response.message = `🎉 ¡Nivel ${result.current_level} completado!`;
-    } else if (result.level_changed) {
-      response.message = `🎊 ¡Avanzaste al nivel ${result.current_level}!`;
+      response.message = ` ¡Nivel completado! Avanzaste a ${result.nextTier}`;
     } else {
       response.message = 'Strip otorgado correctamente';
     }
 
+    console.log('[grantStrip] Respuesta:', response);
     return res.json(response);
 
   } catch (err) {
-    console.error('[grantStrip] ❌ Error:', err.message, err.stack);
-    return res.status(500).json({ error: 'Error del servidor' });
+    console.error('[grantStrip] Error:', err.message);
+    console.error('[grantStrip] Stack:', err.stack);
+    return res.status(500).json({ 
+      error: 'Error del servidor',
+      message: err.message 
+    });
   }
 };
+
+// FIN de grantStrip
 
 // POST /internal/passes/:serial/reset-strips
 const resetStrips = async (req, res) => {
@@ -387,66 +633,271 @@ const resetStrips = async (req, res) => {
       return res.status(400).json({ error: 'Esta tarjeta no es de tipo strips' });
     }
 
-    // Guardar en historial si fue completado
+    console.log('[resetStrips] Iniciando reset:', {
+      serial,
+      redeemed,
+      strips_collected: row.strips_collected,
+      strips_required: row.strips_required, 
+      reward_title: row.reward_title
+    });
+
+    // ===== OBTENER CONFIGURACIÓN DE RECOMPENSAS =====
+    const rewardConfig = await cardSvc.getRewardSystemConfig(row.card_detail_id);
+    
+    if (!rewardConfig) {
+      console.warn('[resetStrips] No se encontró reward config, usando reset simple');
+      return await handleSimpleReset(row, serial, redeemed, res);
+    }
+
+    const isMultiTier = rewardConfig.type === 'multi-tier';
+    console.log('[resetStrips] Sistema:', isMultiTier ? 'Multi-tier' : 'Single-tier');
+
+    // ===== GUARDAR EN HISTORIAL SI FUE COMPLETADO =====
     if (row.strips_collected >= row.strips_required) {
-      await saveStripCompletionHistory({
-        userId: row.id,
-        serial: serial,
-        strips_collected: row.strips_collected,
-        strips_required: row.strips_required,
-        reward_title: row.reward_title,
-        completed_at: new Date(),
-        redeemed: redeemed,
-        redeemed_at: redeemed ? new Date() : null
-      });
-    }
-
-    // Resetear strips en la base de datos
-    const updated = await resetStripsBySerial(serial);
-    if (!updated) {
-      return res.status(500).json({ error: 'Error al resetear strips' });
-    }
-
-    // Notificar con APNs
-    let notified = 0;
-    if (process.env.APNS_ENABLED === 'true') {
-      const tokens = await listPushTokensBySerial(serial);
-      const results = await Promise.allSettled(
-        tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
-      );
-
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i];
-        if (r.status === 'fulfilled' && r.value.status === 200) {
-          notified++;
-        }
+      try {
+        await saveStripCompletionHistory({
+          userId: row.id,
+          serial: serial,
+          strips_collected: row.strips_collected,
+          strips_required: row.strips_required,
+          reward_title: row.reward_title,
+          completed_at: new Date(),
+          redeemed: redeemed,
+          redeemed_at: redeemed ? new Date() : null
+        });
+        console.log('[resetStrips] Historial guardado');
+      } catch (histError) {
+        console.error('[resetStrips] Error guardando historial:', histError.message);
       }
     }
 
-    return res.json({
-      ok: true,
-      strips_collected: 0,
-      strips_required: updated.strips_required,
-      reward_title: updated.reward_title,
-      isComplete: false,
-      notified,
-      message: redeemed 
-        ? 'Premio canjeado y colección reiniciada' 
-        : 'Colección reiniciada exitosamente'
-    });
+    // ===== MULTI-TIER: AVANZAR O REINICIAR =====
+    if (isMultiTier) {
+      const usersService = require('../services/usersService');
+      const { clearUserStripsLog } = require('../db/appleWalletdb');
+
+      // Calcular tier actual ANTES del reset
+      const tierInfoBefore = usersService.calculateCurrentTier(
+        {
+          strips_collected: row.strips_collected,
+          strips_required: row.strips_required, 
+          reward_title: row.reward_title
+        },
+        rewardConfig.multiTier
+      );
+
+      console.log('[resetStrips] Tier ANTES del reset:', {
+        currentLevel: tierInfoBefore.currentLevel,
+        totalLevels: tierInfoBefore.totalLevels,
+        hasNextReward: !!tierInfoBefore.nextReward
+      });
+
+      // ===== CASO 1: HAY SIGUIENTE TIER → AVANZAR =====
+      if (tierInfoBefore.nextReward) {
+        console.log('[resetStrips] Avanzando al siguiente tier:', tierInfoBefore.nextReward.title);
+
+        const nextReward = tierInfoBefore.nextReward;
+        
+        // LIMPIAR LOG DE STRIPS
+        await clearUserStripsLog(row.id);
+        console.log('[resetStrips] Strips log limpiado');
+
+        // ACTUALIZAR A SIGUIENTE TIER
+        const updated = await resetStripsBySerial(serial, {
+          strips_required: nextReward.strips_required,
+          reward_title: nextReward.title,
+          reward_description: nextReward.description
+        });
+
+        if (!updated) {
+          return res.status(500).json({ error: 'Error al actualizar tier' });
+        }
+
+        // CALCULAR TIER DESPUÉS DEL RESET (para tier_info correcto)
+        const newTierLevel = tierInfoBefore.currentLevel + 1;
+        
+        const tierInfoAfter = usersService.calculateCurrentTier(
+          {
+            strips_collected: 0,  // Reseteo a 0
+            strips_required: nextReward.strips_required, 
+            reward_title: nextReward.title
+          },
+          rewardConfig.multiTier
+        );
+
+        console.log('[resetStrips] Tier DESPUÉS del reset:', {
+          currentLevel: tierInfoAfter.currentLevel,
+          totalLevels: tierInfoAfter.totalLevels,
+          nextReward: tierInfoAfter.nextReward?.title
+        });
+
+        // Notificar con APNs
+        let notified = 0;
+        if (process.env.APNS_ENABLED === 'true') {
+          const tokens = await listPushTokensBySerial(serial);
+          const results = await Promise.allSettled(
+            tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
+          );
+
+          for (let i = 0; i < results.length; i++) {
+            const r = results[i];
+            if (r.status === 'fulfilled' && r.value.status === 200) {
+              notified++;
+            }
+          }
+          console.log('[resetStrips] APNs enviados:', notified, '/', tokens.length);
+        }
+
+        return res.json({
+          ok: true,
+          strips_collected: 0,
+          strips_required: nextReward.strips_required,
+          reward_title: nextReward.title,
+          isComplete: false,
+          tier_advanced: true,
+          new_tier: newTierLevel,
+          total_tiers: tierInfoAfter.totalLevels,
+          notified,
+          message: redeemed 
+            ? `Premio canjeado. Avanzaste al Nivel ${newTierLevel}: ${nextReward.title}`
+            : `Avanzado al Nivel ${newTierLevel}: ${nextReward.title}`,
+          // TIER INFO CORRECTO (después del reset)
+          tier_info: {
+            current_level: tierInfoAfter.currentLevel,
+            total_levels: tierInfoAfter.totalLevels,
+            current_reward: nextReward.title,
+            next_reward: tierInfoAfter.nextReward?.title || null
+          }
+        });
+      }
+
+      // ===== CASO 2: ÚLTIMO TIER → REINICIAR AL TIER 1 =====
+      console.log('[resetStrips] Último tier completado, reiniciando al tier 1');
+
+      const firstReward = rewardConfig.multiTier.rewards[0];
+
+      // LIMPIAR LOG DE STRIPS
+      await clearUserStripsLog(row.id);
+      console.log('[resetStrips] Strips log limpiado');
+
+      // RESETEAR AL TIER 1
+      const updated = await resetStripsBySerial(serial, {
+        strips_required: firstReward.strips_required,
+        reward_title: firstReward.title,
+        reward_description: firstReward.description
+      });
+
+      if (!updated) {
+        return res.status(500).json({ error: 'Error al resetear' });
+      }
+
+      // CALCULAR TIER DESPUÉS DEL RESET
+      const tierInfoAfter = usersService.calculateCurrentTier(
+        {
+          strips_collected: 0,
+          strips_required: firstReward.strips_required
+        },
+        rewardConfig.multiTier
+      );
+
+      console.log('[resetStrips] Tier DESPUÉS del reset al tier 1:', {
+        currentLevel: tierInfoAfter.currentLevel,
+        totalLevels: tierInfoAfter.totalLevels
+      });
+
+      // Notificar con APNs
+      let notified = 0;
+      if (process.env.APNS_ENABLED === 'true') {
+        const tokens = await listPushTokensBySerial(serial);
+        const results = await Promise.allSettled(
+          tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
+        );
+
+        for (let i = 0; i < results.length; i++) {
+          const r = results[i];
+          if (r.status === 'fulfilled' && r.value.status === 200) {
+            notified++;
+          }
+        }
+        console.log('[resetStrips] APNs enviados:', notified, '/', tokens.length);
+      }
+
+      return res.json({
+        ok: true,
+        strips_collected: 0,
+        strips_required: firstReward.strips_required,
+        reward_title: firstReward.title,
+        isComplete: false,
+        cycle_completed: true,
+        restarted_to_tier_1: true,
+        notified,
+        message: redeemed 
+          ? '¡Ciclo completado! Premio canjeado y reiniciado al Nivel 1'
+          : 'Ciclo completado. Reiniciado al Nivel 1',
+        // TIER INFO CORRECTO (después del reset)
+        tier_info: {
+          current_level: tierInfoAfter.currentLevel,
+          total_levels: tierInfoAfter.totalLevels,
+          current_reward: firstReward.title,
+          next_reward: tierInfoAfter.nextReward?.title || null
+        }
+      });
+    }
+
+    // ===== SINGLE-TIER: RESET NORMAL =====
+    console.log('[resetStrips] Reset simple (single-tier)');
+    return await handleSimpleReset(row, serial, redeemed, res);
 
   } catch (err) {
-    //console.error('resetStrips error:', err);
-    return res.status(500).json({ error: 'Error del servidor' });
+    console.error('[resetStrips] Error:', err.message);
+    console.error('[resetStrips] Stack:', err.stack);
+    return res.status(500).json({ 
+      error: 'Error del servidor',
+      message: err.message 
+    });
   }
 };
 
+// ===== HELPER: RESET SIMPLE (SINGLE-TIER O FALLBACK) =====
+async function handleSimpleReset(row, serial, redeemed, res) {
+  const updated = await resetStripsBySerial(serial);
+  
+  if (!updated) {
+    return res.status(500).json({ error: 'Error al resetear strips' });
+  }
+
+  // Notificar con APNs
+  let notified = 0;
+  if (process.env.APNS_ENABLED === 'true') {
+    const tokens = await listPushTokensBySerial(serial);
+    const results = await Promise.allSettled(
+      tokens.map(t => notifyWallet(t.push_token, t.env, { serial }))
+    );
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === 'fulfilled' && r.value.status === 200) {
+        notified++;
+      }
+    }
+  }
+
+  return res.json({
+    ok: true,
+    strips_collected: 0,
+    strips_required: updated.strips_required,
+    reward_title: updated.reward_title,
+    isComplete: false,
+    notified,
+    message: redeemed 
+      ? 'Premio canjeado y colección reiniciada' 
+      : 'Colección reiniciada exitosamente'
+  });
+}
+
 
 // ========== GET PASS - CON STRIPS DESDE BUSINESS ==========
-// controllers/passkitController.js - Sección de getPass
-
 // controllers/passkitController.js
-
 const getPass = async (req, res) => {
   try {
     const passTypeId = req.params.passTypeId;
@@ -501,8 +952,10 @@ const getPass = async (req, res) => {
 
     // Resolver diseño unificado
     let resolved = null;
+    let designRow = null;
+    
     try {
-      const designRow = await cardSvc.getOneCardDetails(row.card_detail_id);
+      designRow = await cardSvc.getOneCardDetails(row.card_detail_id);
   
       if (designRow && designRow.design_json) {
         resolved = resolveDesignForUser(designRow.design_json, {
@@ -573,7 +1026,7 @@ const getPass = async (req, res) => {
     let userStripsImage = null;
     if (cardType === 'strips') {
       try {
-        console.log('[getPass] 🎨 Generando imagen de strips...');
+        console.log('[getPass] Generando imagen de strips...');
         
         const stripImageOn = brandAssets.stripImageOn || brandAssets.stripOnBuffer;
         const stripImageOff = brandAssets.stripImageOff || brandAssets.stripOffBuffer;
@@ -598,12 +1051,12 @@ const getPass = async (req, res) => {
         }
 
       } catch (stripsError) {
-        console.error('[getPass] ❌ Error generando strips:', stripsError.message);
+        console.error('[getPass] Error generando strips:', stripsError.message);
         // Fallback: usar imagen estática
         userStripsImage = brandAssets.stripOnBuffer || brandAssets.stripBuffer || null;
         
         if (userStripsImage) {
-          console.log('[getPass] ⚠️ Usando fallback strip image');
+          console.log('[getPass] Usando fallback strip image');
         }
       }
     }
@@ -615,28 +1068,83 @@ const getPass = async (req, res) => {
       strip: userStripsImage || (brandAssets.stripBuffer || null)
     };
 
+    // ========== CALCULAR TIER INFO PARA MULTI-TIER ==========
+    let tierInfo = null;
+    
+    if (cardType === 'strips' && designRow?.design_json?.rewardSystem) {
+      const rewardSystem = designRow.design_json.rewardSystem;
+      
+      if (rewardSystem.type === 'multi-tier' && rewardSystem.multiTier?.rewards) {
+        try {
+          const usersService = require('../services/usersService');
+          
+          tierInfo = usersService.calculateCurrentTier(
+            {
+              strips_collected: ctx.strips_collected,
+              strips_required: ctx.strips_required, 
+              reward_title: ctx.reward_title
+            },
+            rewardSystem.multiTier
+          );
+          
+          console.log('[getPass] Multi-tier detectado:', {
+            currentLevel: tierInfo.currentLevel,
+            totalLevels: tierInfo.totalLevels,
+            currentReward: tierInfo.currentReward.title,
+            nextReward: tierInfo.nextReward?.title
+          });
+        } catch (tierError) {
+          console.error('[getPass] Error calculando tier:', tierError.message);
+        }
+      }
+    }
+
     // FIELDS PARA STRIPS O PUNTOS
     let fields = dj.fields || {};
 
     if (cardType === 'strips') {
       console.log('[getPass] Configurando fields para strip card');
       
+      // ===== PRIMARY FIELDS CON TIER =====
+      const primaryFields = [
+        { 
+          key: 'progress', 
+          label: 'PROGRESO', 
+          value: `${ctx.strips_collected}/${ctx.strips_required}` 
+        }
+      ];
+      
+      // Agregar tier si es multi-tier
+      if (tierInfo) {
+        primaryFields.push({
+          key: 'tier',
+          label: 'NIVEL',
+          value: `${tierInfo.currentLevel}/${tierInfo.totalLevels}`
+        });
+      }
+      
+      // ===== BACK FIELDS CON SIGUIENTE PREMIO =====
+      const backFields = [
+        { key: 'memberId', label: 'Member ID', value: row.loyalty_account_id || String(row.id) },
+        { key: 'reward', label: 'Premio Actual', value: ctx.reward_title || 'Reward' },
+        { key: 'status', label: 'Estado', value: ctx.isComplete ? 'COMPLETO' : 'EN PROGRESO' }
+      ];
+      
+      // Agregar siguiente premio si existe
+      if (tierInfo && tierInfo.nextReward) {
+        backFields.push({
+          key: 'nextReward',
+          label: 'Siguiente Premio',
+          value: tierInfo.nextReward.title
+        });
+      }
+      
       fields = {
-        primary: fields.primary || [
-          { 
-            key: 'progress', 
-            label: 'PROGRESO', 
-            value: `${ctx.strips_collected}/${ctx.strips_required}` 
-          }
-        ],
+        primary: fields.primary || primaryFields,
         secondary: fields.secondary || [
           { key: 'member', label: 'MEMBER', value: ctx.userName || '' }
         ],
-        back: fields.back || [
-          { key: 'memberId', label: 'Member ID', value: row.loyalty_account_id || String(row.id) },
-          { key: 'reward', label: 'Premio', value: ctx.reward_title || 'Reward' },
-          { key: 'status', label: 'Estado', value: ctx.isComplete ? 'COMPLETO' : 'EN PROGRESO' }
-        ]
+        back: fields.back || backFields
       };
     } else {
       fields = {
@@ -675,9 +1183,19 @@ const getPass = async (req, res) => {
       // Garantizar que al menos quede algo
       if (!fields.primary.length && !fields.secondary.length) {
         if (cardType === 'strips') {
-          fields.primary = [
+          const primaryFallback = [
             { key: 'progress', label: 'PROGRESO', value: `${ctx.strips_collected}/${ctx.strips_required}` }
           ];
+          
+          if (tierInfo) {
+            primaryFallback.push({
+              key: 'tier',
+              label: 'NIVEL',
+              value: `${tierInfo.currentLevel}/${tierInfo.totalLevels}`
+            });
+          }
+          
+          fields.primary = primaryFallback;
         } else {
           fields.primary = [
             { key: 'points', label: 'PUNTOS', value: String(ctx.points ?? 0) }
@@ -736,13 +1254,14 @@ const getPass = async (req, res) => {
     return res.status(200).send(buffer);
 
   } catch (err) {
-    console.error('[getPass] ❌ Error:', err.message, err.stack);
+    console.error('[getPass] Error:', err.message, err.stack);
     return res.status(500).json({
       error: 'PKPass build/sign error',
       message: err.message
     });
   }
 };
+
 
 module.exports = {
   getPass,

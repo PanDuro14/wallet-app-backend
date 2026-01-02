@@ -23,7 +23,9 @@ router.patch('/google/strips', walletController.updateGoogleStrips);
 
 // Utilidades
 router.post('/google/ensure', walletController.ensureGoogleClass);
-router.post('/google/debug', walletController.debugGoogle); // Solo dev
+router.post('/google/debug', walletController.debugGoogle); 
+router.post('/google/strips/reset', walletController.resetGoogleStrips); 
+router.post('/google/debug-object', walletController.debugGoogleObject); 
 
 /* ====================== APPLE WALLET ====================== */
 

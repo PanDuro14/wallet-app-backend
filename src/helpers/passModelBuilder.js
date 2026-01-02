@@ -20,7 +20,7 @@ async function toPNG(buffer) {
   return await sharp(buffer).png().toBuffer();
 }
 
-// ⬇️ NUEVO: genera tamaños “amigables” para Wallet
+// NUEVO: genera tamaños “amigables” para Wallet
 async function writeLogoSet(modelDir, buffer) {
   if (!buffer) return;
   const png = await toPNG(buffer);

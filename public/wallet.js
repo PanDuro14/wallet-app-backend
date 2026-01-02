@@ -13,17 +13,17 @@ const translations = {
     retry: 'Reintentar',
     cardNotFound: 'Tarjeta no encontrada',
     noCardCode: 'No se encontró el código de la tarjeta',
-    appAlreadyInstalled: '✓ La app ya está instalada. Ábrela desde tu pantalla de inicio.',
+    appAlreadyInstalled: ' La app ya está instalada. Ábrela desde tu pantalla de inicio.',
     installError: 'Error al instalar: ',
     installInstructions: {
-      title: '📱 Instalar en tu iPhone',
-      step1: { title: 'Toca el botón de compartir', desc: 'En la barra inferior de Safari', icon: '⬆️' },
-      step2: { title: 'Selecciona "Añadir a inicio"', desc: 'Desplázate hacia abajo en el menú', icon: '➕ 🏠' },
+      title: ' Instalar en tu iPhone',
+      step1: { title: 'Toca el botón de compartir', desc: 'En la barra inferior de Safari', icon: '' },
+      step2: { title: 'Selecciona "Añadir a inicio"', desc: 'Desplázate hacia abajo en el menú', icon: ' ' },
       step3: { title: 'Confirma', desc: 'Toca "Añadir" en la esquina superior derecha', icon: '' },
-      note: '💡 La app aparecerá en tu pantalla de inicio como cualquier otra aplicación'
+      note: ' La app aparecerá en tu pantalla de inicio como cualquier otra aplicación'
     },
     manualInstructions: {
-      intro: '💡 Para instalar esta app:\n\n',
+      intro: ' Para instalar esta app:\n\n',
       chrome: '1. Toca el menú (⋮) en la esquina superior derecha\n2. Selecciona "Agregar a pantalla de inicio" o "Instalar app"\n3. Confirma en el diálogo que aparece',
       other: '1. Abre esta página en Chrome o Edge\n2. Usa el menú del navegador\n3. Selecciona "Agregar a pantalla de inicio"'
     }
@@ -39,17 +39,17 @@ const translations = {
     retry: 'Retry',
     cardNotFound: 'Card not found',
     noCardCode: 'Card code not found',
-    appAlreadyInstalled: '✓ The app is already installed. Open it from your home screen.',
+    appAlreadyInstalled: ' The app is already installed. Open it from your home screen.',
     installError: 'Installation error: ',
     installInstructions: {
-      title: '📱 Install on your iPhone',
-      step1: { title: 'Tap the share button', desc: 'At the bottom bar of Safari', icon: '⬆️' },
-      step2: { title: 'Select "Add to Home Screen"', desc: 'Scroll down in the menu', icon: '➕ 🏠' },
+      title: ' Install on your iPhone',
+      step1: { title: 'Tap the share button', desc: 'At the bottom bar of Safari', icon: '' },
+      step2: { title: 'Select "Add to Home Screen"', desc: 'Scroll down in the menu', icon: ' ' },
       step3: { title: 'Confirm', desc: 'Tap "Add" in the top right corner', icon: '' },
-      note: '💡 The app will appear on your home screen like any other application'
+      note: ' The app will appear on your home screen like any other application'
     },
     manualInstructions: {
-      intro: '💡 To install this app:\n\n',
+      intro: ' To install this app:\n\n',
       chrome: '1. Tap the menu (⋮) in the top right corner\n2. Select "Add to Home Screen" or "Install app"\n3. Confirm in the dialog that appears',
       other: '1. Open this page in Chrome or Edge\n2. Use the browser menu\n3. Select "Add to Home Screen"'
     }
@@ -63,9 +63,9 @@ const translations = {
                    location.hostname === '127.0.0.1';
   
   if (!isSecure) {
-    console.error('⚠️ Push notifications requieren HTTPS o localhost');
+    console.error(' Push notifications requieren HTTPS o localhost');
   } else {
-    console.log('✅ Entorno seguro para push notifications');
+    console.log(' Entorno seguro para push notifications');
   }
 })();
 
@@ -108,17 +108,17 @@ const firebaseConfig = {
 };
 
 // Configurar listener de SW
-console.log('📡 [INIT] Configurando listener ANTES de SW...');
+console.log(' [INIT] Configurando listener ANTES de SW...');
 
 if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
   navigator.serviceWorker.addEventListener('message', handleSWMessage);
-  console.log('✓ [INIT] Listener configurado (SW ya activo)');
+  console.log(' [INIT] Listener configurado (SW ya activo)');
 }
 
 function handleSWMessage(event) {
-  console.log('[PWA] 📨 Mensaje del SW:', event.data);
+  console.log('[PWA] Mensaje del SW:', event.data);
   if (event.data?.type === 'UPDATE_AVAILABLE') {
-    console.log('🔄 [PWA] Actualización disponible, recargando tarjeta...');
+    console.log(' [PWA] Actualización disponible, recargando tarjeta...');
     if (serial) loadCard(serial);
   }
 }
@@ -129,13 +129,13 @@ let swRegistration = null;
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      console.log('[SW] 📝 Registrando Service Worker...');
+      console.log('[SW] Registrando Service Worker...');
       
       swRegistration = await navigator.serviceWorker.register('/service-worker.js');
-      console.log('✓ [SW] Registrado:', swRegistration.scope);
+      console.log(' [SW] Registrado:', swRegistration.scope);
 
       await navigator.serviceWorker.ready;
-      console.log('✓ [SW] Ready y activo');
+      console.log(' [SW] Ready y activo');
 
       if (!navigator.serviceWorker.controller) {
         navigator.serviceWorker.addEventListener('message', handleSWMessage);
@@ -147,7 +147,7 @@ if ('serviceWorker' in navigator) {
       setTimeout(updateInstallButton, 500);
 
     } catch (error) {
-      console.error('❌ [SW] Error:', error);
+      console.error(' [SW] Error:', error);
     }
   });
 }
@@ -160,7 +160,7 @@ if (serial) {
 
 // ===== EVENTOS PWA =====
 window.addEventListener('beforeinstallprompt', (e) => {
-  console.log('🎯 beforeinstallprompt captured');
+  console.log(' beforeinstallprompt captured');
   e.preventDefault();
   deferredPrompt = e;
   promptCaptured = true;
@@ -168,13 +168,13 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 window.addEventListener('appinstalled', async () => {
-  console.log('✅ App installed');
+  console.log(' App installed');
   deferredPrompt = null;
   updateInstallButton();
   
   setTimeout(() => {
-    alert('✅ App instalada!\n\n' +
-          '📱 Para activar las notificaciones:\n' +
+    alert(' App instalada!\n\n' +
+          ' Para activar las notificaciones:\n' +
           '1. Cierra esta ventana\n' +
           '2. Abre la app desde el ícono instalado\n\n' +
           'Las notificaciones se activarán automáticamente.');
@@ -183,7 +183,7 @@ window.addEventListener('appinstalled', async () => {
 
 // ===== INSTALACIÓN =====
 async function installPWA() {
-  console.log('📱 installPWA called', { isIOS, isStandalone, hasDeferredPrompt: !!deferredPrompt });
+  console.log(' installPWA called', { isIOS, isStandalone, hasDeferredPrompt: !!deferredPrompt });
   
   if (isIOS) {
     if (isStandalone) {
@@ -203,11 +203,11 @@ async function installPWA() {
     try {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      console.log(`👤 User response: ${outcome}`);
+      console.log(` User response: ${outcome}`);
       deferredPrompt = null;
       updateInstallButton();
     } catch (error) {
-      console.error('❌ Error during installation:', error);
+      console.error(' Error during installation:', error);
       alert(t('installError') + error.message);
     }
   } else {
@@ -232,7 +232,7 @@ function updateInstallButton() {
   const installBtn = document.getElementById('install-btn');
   if (!installBtn) return;
 
-  console.log('🔄 Updating button...', { isStandalone, isIOS, hasDeferredPrompt: !!deferredPrompt });
+  console.log(' Updating button...', { isStandalone, isIOS, hasDeferredPrompt: !!deferredPrompt });
 
   if (isStandalone) {
     installBtn.style.display = 'none';
@@ -241,7 +241,7 @@ function updateInstallButton() {
 
   if (isIOS) {
     installBtn.style.display = 'flex';
-    installBtn.innerHTML = `📱 ${t('howToInstall')}`;
+    installBtn.innerHTML = ` ${t('howToInstall')}`;
     installBtn.classList.add('ios');
     installBtn.disabled = false;
     installBtn.onclick = installPWA;
@@ -250,7 +250,7 @@ function updateInstallButton() {
 
   if (deferredPrompt) {
     installBtn.style.display = 'flex';
-    installBtn.innerHTML = `⬇️ ${t('installApp')}`;
+    installBtn.innerHTML = ` ${t('installApp')}`;
     installBtn.classList.remove('ios');
     installBtn.disabled = false;
     installBtn.onclick = installPWA;
@@ -259,7 +259,7 @@ function updateInstallButton() {
 
   if (!promptCaptured) {
     installBtn.style.display = 'flex';
-    installBtn.innerHTML = `⏳ ${t('loadingDots')}`;
+    installBtn.innerHTML = ` ${t('loadingDots')}`;
     installBtn.disabled = true;
     
     setTimeout(() => {
@@ -267,7 +267,7 @@ function updateInstallButton() {
         updateInstallButton();
       } else {
         installBtn.style.display = 'flex';
-        installBtn.innerHTML = `📱 ${t('addToHome')}`;
+        installBtn.innerHTML = ` ${t('addToHome')}`;
         installBtn.disabled = false;
         installBtn.classList.remove('ios');
         installBtn.onclick = showManualInstallInstructions;
@@ -277,7 +277,7 @@ function updateInstallButton() {
   }
 
   installBtn.style.display = 'flex';
-  installBtn.innerHTML = `📱 ${t('addToHome')}`;
+  installBtn.innerHTML = ` ${t('addToHome')}`;
   installBtn.disabled = false;
   installBtn.classList.remove('ios');
   installBtn.onclick = showManualInstallInstructions;
@@ -292,7 +292,7 @@ if (!serial) {
 
 async function loadCard(serial) {
   try {
-    console.log(`🔄 [loadCard] Cargando tarjeta: ${serial}`);
+    console.log(` [loadCard] Cargando tarjeta: ${serial}`);
     
     const timestamp = new Date().getTime();
     const response = await fetch(`/api/wallet/${serial}?_t=${timestamp}`, {
@@ -302,11 +302,11 @@ async function loadCard(serial) {
     if (!response.ok) throw new Error(t('cardNotFound'));
     
     const data = await response.json();
-    console.log('✓ [loadCard] Datos obtenidos:', data);
+    console.log(' [loadCard] Datos obtenidos:', data);
     
     renderCard(data);
   } catch (error) {
-    console.error('❌ [loadCard] Error:', error);
+    console.error(' [loadCard] Error:', error);
     showError(error.message);
   }
 }
@@ -314,7 +314,7 @@ async function loadCard(serial) {
 function renderCard(data) {
   const { card, user, business, design, strips } = data;
 
-  console.log(`🎨 [renderCard] Strips: ${strips.collected}/${strips.required}`);
+  console.log(` [renderCard] Strips: ${strips.collected}/${strips.required}`);
 
   document.documentElement.style.setProperty('--card-bg', design.background_color);
   document.documentElement.style.setProperty('--text-color', design.foreground_color);
@@ -364,7 +364,7 @@ function renderCard(data) {
 
       <div class="action-buttons">
         <button id="install-btn" class="action-btn btn-install" onclick="installPWA()">
-          ⬇️ ${t('installApp')}
+          ${t('installApp')}
         </button>
       </div>
     </div>
@@ -441,7 +441,7 @@ function generateBarcode(type, data) {
 
 function generateStrips(collected, required, stripOnUrl, stripOffUrl) {
   let html = '';
-  console.log(`🎫 [generateStrips] Generando: ${collected}/${required}`);
+  console.log(` [generateStrips] Generando: ${collected}/${required}`);
   
   for (let i = 0; i < required; i++) {
     const isCollected = i < collected;
@@ -455,7 +455,7 @@ function generateStrips(collected, required, stripOnUrl, stripOffUrl) {
     } else {
       html += `
         <div class="strip-item ${isCollected ? 'collected' : ''}">
-          ${isCollected ? '✓' : ''}
+          ${isCollected ? '' : ''}
         </div>
       `;
     }
@@ -466,7 +466,7 @@ function generateStrips(collected, required, stripOnUrl, stripOffUrl) {
 function showError(message) {
   document.getElementById('app').innerHTML = `
     <div class="error">
-      <h2>⚠ ${t('error')}</h2>
+      <h2> ${t('error')}</h2>
       <p>${message}</p>
       <button class="btn" onclick="location.reload()">${t('retry')}</button>
     </div>
@@ -476,25 +476,25 @@ function showError(message) {
 // ===== PUSH NOTIFICATIONS CON FIREBASE =====
 async function setupPushNotifications(registration) {
   try {
-    console.log('[Push] 🔔 Iniciando configuración con Firebase...');
+    console.log('[Push] Iniciando configuración con Firebase...');
     
     if (!('Notification' in window)) {
-      console.warn('[Push] ❌ Notification API no disponible');
+      console.warn('[Push] Notification API no disponible');
       return;
     }
 
     if (isIOS) {
-      console.log('[Push] ℹ️ iOS Safari no soporta Web Push');
+      console.log('[Push] iOS Safari no soporta Web Push');
       return;
     }
 
     const isCurrentlyStandalone = window.matchMedia('(display-mode: standalone)').matches || 
                                   window.navigator.standalone === true;
 
-    console.log('[Push] 🔍 Modo standalone:', isCurrentlyStandalone);
+    console.log('[Push] Modo standalone:', isCurrentlyStandalone);
 
     if (!isCurrentlyStandalone) {
-      console.log('[Push] ℹ️ Esperando modo standalone');
+      console.log('[Push] Esperando modo standalone');
       return;
     }
 
@@ -508,17 +508,17 @@ async function setupPushNotifications(registration) {
     console.log('[Push] Permiso actual:', Notification.permission);
 
     if (Notification.permission === 'granted') {
-      console.log('[Push] ✅ Permiso ya otorgado, obteniendo token...');
+      console.log('[Push] Permiso ya otorgado, obteniendo token...');
       await getFirebaseToken(messaging);
       return;
     }
 
     if (Notification.permission === 'denied') {
-      console.warn('[Push] ❌ Permiso denegado');
+      console.warn('[Push] Permiso denegado');
       return;
     }
 
-    console.log('[Push] 📱 Pidiendo permiso...');
+    console.log('[Push] Pidiendo permiso...');
     setTimeout(async () => {
       const permission = await Notification.requestPermission();
       console.log('[Push] Respuesta:', permission);
@@ -529,34 +529,34 @@ async function setupPushNotifications(registration) {
     }, 2000);
 
   } catch (error) {
-    console.error('[Push] ❌ Error en setupPushNotifications:', error);
+    console.error('[Push] Error en setupPushNotifications:', error);
   }
 }
 
 async function getFirebaseToken(messaging) {
   try {
-    console.log('[Push] 🔑 Obteniendo token de Firebase...');
+    console.log('[Push] Obteniendo token de Firebase...');
 
     const token = await messaging.getToken({
       vapidKey: 'BMaVX5UENLzwkd1zSrkSXiMRD0OKoZTN7M3zX2NmQT2BEdnMh-ivraZXvwNwCqyE9PjGUIJlEJ8-kA4ocl-M2Ig'
     });
 
     if (token) {
-      console.log('[Push] ✅ Token obtenido:', token.substring(0, 50) + '...');
+      console.log('[Push] Token obtenido:', token.substring(0, 50) + '...');
       await saveFirebaseToken(token);
     } else {
-      console.error('[Push] ❌ No se pudo obtener token');
+      console.error('[Push] No se pudo obtener token');
     }
 
   } catch (error) {
-    console.error('[Push] ❌ Error obteniendo token:', error);
+    console.error('[Push] Error obteniendo token:', error);
     
-    // ✅ Detectar si es Chrome Desktop con el bug conocido
+    // Detectar si es Chrome Desktop con el bug conocido
     const isDesktop = !/Android|iPhone|iPad|iPod/.test(navigator.userAgent);
     
     if (error.name === 'AbortError' && isDesktop) {
-      console.warn('[Push] ⚠️ Chrome Desktop tiene problemas conocidos con FCM');
-      console.warn('[Push] 💡 Notificaciones funcionarán mejor en:');
+      console.warn('[Push] Chrome Desktop tiene problemas conocidos con FCM');
+      console.warn('[Push] Notificaciones funcionarán mejor en:');
       console.warn('[Push]   - Chrome Android');
       console.warn('[Push]   - Edge');
       console.warn('[Push]   - Brave');
@@ -574,12 +574,12 @@ function showPushWarning() {
   setTimeout(() => {
     const lang = currentLang || 'es';
     const message = lang === 'es' 
-      ? '⚠️ Las notificaciones push no están disponibles en Chrome Desktop.\n\n' +
-        '✅ Para recibir notificaciones:\n' +
+      ? ' Las notificaciones push no están disponibles en Chrome Desktop.\n\n' +
+        ' Para recibir notificaciones:\n' +
         '• Usa la app en tu celular Android\n' +
         '• O espera futuras actualizaciones de Chrome'
-      : '⚠️ Push notifications are not available on Chrome Desktop.\n\n' +
-        '✅ To receive notifications:\n' +
+      : ' Push notifications are not available on Chrome Desktop.\n\n' +
+        ' To receive notifications:\n' +
         '• Use the app on your Android phone\n' +
         '• Or wait for future Chrome updates';
     
@@ -590,7 +590,7 @@ function showPushWarning() {
 
 async function saveFirebaseToken(token) {
   try {
-    console.log('[Push] 💾 Guardando token...');
+    console.log('[Push] Guardando token...');
     console.log('[Push] Serial actual: ', serial); 
 
     if (!serial){
@@ -619,7 +619,7 @@ async function saveFirebaseToken(token) {
       subscription: subscription
     };
     
-    console.log('[Push] 📤 Enviando al backend...');
+    console.log('[Push] Enviando al backend...');
     
     const saveResponse = await fetch('/api/v1/notifications/subscribe', {
       method: 'POST',
@@ -633,17 +633,17 @@ async function saveFirebaseToken(token) {
     }
     
     const result = await saveResponse.json();
-    console.log('[Push] ✅ Guardado exitosamente:', result);
-    console.log('[Push] 🎉 Subscripción completada con Firebase!');
+    console.log('[Push] Guardado exitosamente:', result);
+    console.log('[Push] Subscripción completada con Firebase!');
 
   } catch (error) {
-    console.error('[Push] ❌ Error guardando token:', error);
+    console.error('[Push] Error guardando token:', error);
   }
 }
 
 async function getUserIdBySerial(serial) {
   try {
-    console.log('[Push] 🔍 Obteniendo userId para serial:', serial);
+    console.log('[Push] Obteniendo userId para serial:', serial);
     console.log('[Push] Serial length: ', serial?.length); 
     console.log('[Push] Serial type: ', typeof serial); 
 
@@ -655,26 +655,26 @@ async function getUserIdBySerial(serial) {
     const response = await fetch(`/api/wallet/${serial}`);
     
     if (!response.ok) {
-      console.error('[Push] ❌ Error en fetch:', response.status);
+      console.error('[Push] Error en fetch:', response.status);
       return null;
     }
     
     const data = await response.json();
-    console.log('[Push] 📦 Data completa:', data);
-    console.log('[Push] 📦 data.user:', data.user);
+    console.log('[Push] Data completa:', data);
+    console.log('[Push] data.user:', data.user);
     
     const userId = data.user?.id || data.userId || null;
     
-    console.log('[Push] 🆔 userId encontrado:', userId);
+    console.log('[Push] userId encontrado:', userId);
     
     if (!userId) {
-      console.error('[Push] ❌ No se encontró userId en la respuesta');
+      console.error('[Push] No se encontró userId en la respuesta');
     }
     
     return userId;
     
   } catch (error) {
-    console.error('[Push] ❌ Error obteniendo userId:', error);
+    console.error('[Push] Error obteniendo userId:', error);
     return null;
   }
 }
@@ -683,4 +683,4 @@ async function getUserIdBySerial(serial) {
 window.installPWA = installPWA;
 window.closeInstallModal = closeInstallModal;
 
-console.log('✓ wallet.js loaded with Firebase push notifications');
+console.log(' wallet.js loaded with Firebase push notifications');

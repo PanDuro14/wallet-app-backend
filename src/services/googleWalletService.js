@@ -1,9 +1,10 @@
 // services/googleWalletService.js
 const jwt = require('jsonwebtoken');
 const { GoogleAuth } = require('google-auth-library');
+const crypto = require('crypto');
 const fetch = globalThis.fetch || ((...a) => import('node-fetch').then(({ default: f }) => f(...a)));
 
-// ✅ IMPORTS AGREGADOS
+// Imports para strips
 const { saveBufferAsPublicPNG } = require('./imageStorageService');
 const stripsImageService = require('./stripsImageService');
 
@@ -13,13 +14,11 @@ const origins = (process.env.GOOGLE_WALLET_ORIGINS || 'http://localhost:4200')
   .split(',').map(s => s.trim()).filter(Boolean);
 
 const SA_JSON_BASE64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 || '';
-
 const BASE_URL = 'https://walletobjects.googleapis.com/walletobjects/v1';
 
-// Constantes para variantes (paridad con Apple)
 const DesignVariants = { POINTS: 'points', STRIPS: 'strips' };
 
-/* ====================== Helpers base ====================== */
+/* ====================== Helpers Base ====================== */
 let sa;
 function getSA() {
   if (sa) return sa;
@@ -48,19 +47,39 @@ function toHexColor(input) {
   return `#${to2(m[1])}${to2(m[2])}${to2(m[3])}`;
 }
 
+// MEJORADO: Genera card_detail_id único basado en diseño
+function generateCardDetailId(designParams) {
+  const { 
+    hexBackgroundColor, 
+    hexForegroundColor, 
+    programName,
+    variant 
+  } = designParams;
+  
+  const hash = crypto
+    .createHash('md5')
+    .update(JSON.stringify({
+      bg: toHexColor(hexBackgroundColor),
+      fg: toHexColor(hexForegroundColor),
+      name: programName || '',
+      var: variant || 'points'
+    }))
+    .digest('hex')
+    .substring(0, 8);
+  
+  return `design_${hash}`;
+}
+
 function classIdForBusiness(businessId, cardDetailId = null) {
   const biz = String(businessId).replace(/[^a-zA-Z0-9_]/g, '_');
   
-  // SI cardDetailId existe, usamos clase nueva
   if (cardDetailId) {
     const cd = String(cardDetailId).replace(/[^a-zA-Z0-9_]/g, '_');
     return `${issuerId}.loyalty_biz_${biz}_${cd}`;
   }
 
-  // fallback legacy (para usuarios viejos)
   return `${issuerId}.loyalty_biz_${biz}`;
 }
-
 
 function objectIdForCard(cardCode) {
   const suffix = String(cardCode).replace(/[^a-zA-Z0-9_\-]/g, '_');
@@ -80,7 +99,7 @@ function normalizeGWBarcodeType(pref) {
   return 'QR_CODE';
 }
 
-/* ====================== NUEVA: Build Modules by Variant (paridad con Apple) ====================== */
+/* ====================== Build Modules by Variant ====================== */
 function buildModulesByVariant({
   variant,
   userName,
@@ -93,36 +112,22 @@ function buildModulesByVariant({
   reward_title,
   isComplete
 }) {
-  
-  // Normalizar variante
   const normalizedVariant = String(variant || 'points').toLowerCase().trim();
-  
-  //console.log('[buildModulesByVariant] Generando módulos para:', {
-  //  variant: normalizedVariant,
-  //  strips_collected,
-  //  strips_required,
-  //  isComplete
-  //});
-
   const textModules = [];
   let loyaltyPoints = undefined;
 
-  // Variante STRIPS
   if (normalizedVariant === DesignVariants.STRIPS) {
     if (strips_collected !== undefined && strips_required !== undefined) {
-      // Módulo de progreso
       textModules.push({
         header: 'Progreso',
         body: `${strips_collected} de ${strips_required} completados`
       });
 
-      // Balance de puntos muestra el progreso
       loyaltyPoints = {
         label: 'Progreso',
         balance: { string: isComplete ? 'COMPLETADA' : `${strips_collected}/${strips_required}` }
       };
 
-      // Módulo de premio (si existe)
       if (reward_title) {
         textModules.push({
           header: 'Premio',
@@ -130,15 +135,13 @@ function buildModulesByVariant({
         });
       }
 
-      // Estado de completado
       if (isComplete) {
         textModules.push({
           header: 'Estado',
-          body: '¡Colección completa! 🎉'
+          body: '¡Colección completa! '
         });
       }
 
-      // Info del miembro
       if (userName) {
         textModules.push({
           header: 'Miembro',
@@ -146,7 +149,6 @@ function buildModulesByVariant({
         });
       }
     } else {
-      // Sin datos de colección - diseño por defecto
       textModules.push({
         header: 'Tarjeta',
         body: 'Sin colección activa'
@@ -159,16 +161,12 @@ function buildModulesByVariant({
         });
       }
     }
-  } 
-  // Variante POINTS (default)
-  else {
-    // Balance de puntos
+  } else {
     loyaltyPoints = {
       label: 'PUNTOS',
       balance: { string: String(points) }
     };
 
-    // Módulo principal con info del programa
     if (programName) {
       textModules.push({
         header: programName,
@@ -176,7 +174,6 @@ function buildModulesByVariant({
       });
     }
 
-    // Módulo de nivel
     if (tier) {
       textModules.push({
         header: 'NIVEL',
@@ -184,7 +181,6 @@ function buildModulesByVariant({
       });
     }
 
-    // Módulo de antigüedad
     if (since) {
       textModules.push({
         header: 'MIEMBRO DESDE',
@@ -193,7 +189,6 @@ function buildModulesByVariant({
     }
   }
 
-  // Módulo de términos (común a ambas variantes)
   textModules.push({
     header: 'Términos',
     body: 'Válido en sucursales participantes.'
@@ -217,7 +212,7 @@ async function getAccessToken() {
   return token?.token || token;
 }
 
-/* ====================== Clase (branding) ====================== */
+/* ====================== Clase (Branding) ====================== */
 async function ensureLoyaltyClass({
   businessId,
   programName,
@@ -225,35 +220,35 @@ async function ensureLoyaltyClass({
   issuerName = DEFAULT_ISSUER_NAME,
   hexBackgroundColor = '#FFFFFF',
   hexForegroundColor,
-  logoBuffer // ⚠️ Mantener para compatibilidad
+  logoBuffer,
+  autoGenerateId = true // NUEVO: Generar ID automático si no existe
 }) {
   if (!issuerId) throw new Error('Falta GOOGLE_ISSUER_ID');
+  
+  // Auto-generar card_detail_id si no existe
+  if (autoGenerateId && !card_detail_id) {
+    card_detail_id = generateCardDetailId({
+      hexBackgroundColor,
+      hexForegroundColor,
+      programName
+    });
+    console.log('[ensureLoyaltyClass] ID generado automáticamente:', card_detail_id);
+  }
   
   const classId = classIdForBusiness(businessId, card_detail_id);
   const accessToken = await getAccessToken();
 
-  // ⭐ CONSTRUIR URL DEL LOGO DESDE EL ENDPOINT PÚBLICO
   const baseUrl = process.env.PUBLIC_BASE_URL || process.env.WALLET_BASE_URL || '';
   const logoUri = `${baseUrl}/api/public/assets/logo/${businessId}`;
-  
-  //console.log('[ensureLoyaltyClass] Logo URI:', logoUri);
 
-  // Verificar si la clase ya existe
+  // Verificar si clase existe
   const getResp = await fetch(`${BASE_URL}/loyaltyClass/${encodeURIComponent(classId)}`, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
 
   if (getResp.ok) {
-    // ⚠️ La clase ya existe
-    //console.log('[ensureLoyaltyClass] ⚠️ Clase YA EXISTE - Los colores NO se pueden cambiar en clases APPROVED');
-    //console.log('[ensureLoyaltyClass] Para cambiar colores necesitas:', {
-    //  opcion1: 'Ejecutar: node scripts/deleteGoogleWalletClass.js ' + businessId,
-    //  opcion2: 'Crear un nuevo businessId',
-    //  classId,
-    //  note: 'Google no permite modificar clases con reviewStatus=APPROVED'
-    //});
-    
-    return classId;
+    console.log('[ensureLoyaltyClass] Clase existente (reutilizando):', classId);
+    return { classId, card_detail_id, existed: true };
   }
 
   if (getResp.status !== 404) {
@@ -261,10 +256,7 @@ async function ensureLoyaltyClass({
     throw new Error(`GET loyaltyClass falló (${getResp.status}): ${txt}`);
   }
 
-  console.log('[ensureLoyaltyClass] classId intentando acceder:', classId);
-  console.log('[ensureLoyaltyClass] GET response status:', getResp.status);
-
-  // Crear la clase con el logo desde la URL pública
+  // Crear nueva clase
   const body = {
     id: classId,
     issuerName,
@@ -274,18 +266,17 @@ async function ensureLoyaltyClass({
     programLogo: { sourceUri: { uri: logoUri } }
   };
 
-  // ✅ Agregar color de texto si está presente
   if (hexForegroundColor) {
     body.hexFontColor = toHexColor(hexForegroundColor);
   }
 
-  //console.log('[ensureLoyaltyClass] Creando clase:', {
-  //  classId,
-  //  programName,
-  //  logoUri,
-  //  hexBackgroundColor: body.hexBackgroundColor,
-  //  hexFontColor: body.hexFontColor || 'default'
-  //});
+  console.log('[ensureLoyaltyClass] Creando clase nueva:', {
+    classId,
+    card_detail_id,
+    programName,
+    hexBackgroundColor: body.hexBackgroundColor,
+    hexFontColor: body.hexFontColor || 'default'
+  });
 
   const postResp = await fetch(`${BASE_URL}/loyaltyClass`, {
     method: 'POST',
@@ -295,22 +286,18 @@ async function ensureLoyaltyClass({
 
   if (!postResp.ok) {
     if (postResp.status === 409) {
-      console.log('[ensureLoyaltyClass] Clase ya existe (409):', classId);
-      return classId;
+      console.log('[ensureLoyaltyClass] Clase existe (409):', classId);
+      return { classId, card_detail_id, existed: true };
     }
     const txt = await postResp.text().catch(() => '');
-    console.error('[ensureLoyaltyClass] Error al crear clase:', {
-      status: postResp.status,
-      error: txt
-    });
     throw new Error(`POST loyaltyClass falló (${postResp.status}): ${txt}`);
   }
 
-  console.log('[ensureLoyaltyClass] ✓ Clase creada exitosamente:', classId);
-  return classId;
+  console.log('[ensureLoyaltyClass] Clase creada:', classId);
+  return { classId, card_detail_id, existed: false };
 }
 
-/* ====================== CREAR/ACTUALIZAR OBJETO (REST API) - CON COLORES ====================== */
+/* ====================== Crear/Actualizar Objeto ====================== */
 async function createOrUpdateLoyaltyObject({
   cardCode,
   businessId,
@@ -335,29 +322,19 @@ async function createOrUpdateLoyaltyObject({
   if (!issuerId) throw new Error('Falta GOOGLE_ISSUER_ID');
   if (!cardCode || !businessId) throw new Error('cardCode y businessId requeridos');
   
-  console.log('[createOrUpdateLoyaltyObject] Parámetros recibidos:', {
+  console.log('[createOrUpdateLoyaltyObject] Iniciando:', {
     cardCode,
     businessId,
     variant,
-    points,
-    strips_collected,
-    strips_required,
-    hexBackgroundColor,
-    hexForegroundColor,
-    hasStripOn: !!stripImageOn,
-    hasStripOff: !!stripImageOff
+    card_detail_id
   });
 
   const classId = classIdForBusiness(businessId, card_detail_id);
   const objectId = objectIdForCard(cardCode);
   const accessToken = await getAccessToken();
 
-  // Normalizar variante
   const normalizedVariant = (variant || 'points').toLowerCase().trim();
 
-  console.log('[createOrUpdateLoyaltyObject] Variante normalizada:', normalizedVariant);
-
-  // Crear módulos según la variante
   const builtModules = buildModulesByVariant({
     variant: normalizedVariant,
     userName,
@@ -371,16 +348,6 @@ async function createOrUpdateLoyaltyObject({
     isComplete
   });
 
-  // ✅ LOG DE COLORES (una sola vez)
-  if (hexBackgroundColor || hexForegroundColor) {
-    console.log('[createOrUpdateLoyaltyObject] Colores configurados en clase:', {
-      background: hexBackgroundColor,
-      foreground: hexForegroundColor,
-      note: 'Los colores se definen en loyaltyClass, no en el objeto'
-    });
-  }
-
-  // Preparar el objeto base
   const loyaltyObject = {
     id: objectId,
     classId,
@@ -399,20 +366,12 @@ async function createOrUpdateLoyaltyObject({
     loyaltyPoints: builtModules.loyaltyPoints
   };
 
+  // Generar imagen de strips si aplica
   if (normalizedVariant === 'strips' && strips_required && stripImageOn && stripImageOff) {
     try {
-      console.log('[createOrUpdateLoyaltyObject] Generando strip image:', {
-        collected: strips_collected,
-        required: strips_required,
-        hasStripOn: !!stripImageOn,
-        hasStripOff: !!stripImageOff
-      });
-
-      // 1. Convertir base64 -> Buffer
       const onBuf = Buffer.from(stripImageOn, 'base64');
       const offBuf = Buffer.from(stripImageOff, 'base64');
 
-      // 2. Generar imagen compuesta (circulitos llenos/vacíos)
       const stripsImageBuffer = await stripsImageService.generateStripsImage({
         collected: strips_collected || 0,
         total: strips_required,
@@ -421,26 +380,16 @@ async function createOrUpdateLoyaltyObject({
         cardWidth: 640
       });
 
-      console.log('[createOrUpdateLoyaltyObject] Imagen generada, tamaño:', stripsImageBuffer.length, 'bytes');
-
-      // 3. Guardar PNG en /public/strips/:businessId/:cardCode.png
       const { publicUrl } = await saveBufferAsPublicPNG({
         businessId,
         kind: "strip",
         buffer: stripsImageBuffer
       });
 
-      console.log('[createOrUpdateLoyaltyObject] URL generada:', publicUrl);
-      // limpiar de forma preventiva
-      loyaltyObject.imageModulesData = []; 
-      
-      // 4. Insertar en Google Wallet solo si es HTTPS
       if (publicUrl && isHttps(publicUrl)) {
-
-        // Forzamos que este módulo quede como PRIMERO
         loyaltyObject.imageModulesData = [
           {
-            id: "strips_progress", // 🔥 requerido para actualización
+            id: "strips_progress",
             mainImage: {
               sourceUri: { uri: publicUrl },
               contentDescription: {
@@ -452,20 +401,16 @@ async function createOrUpdateLoyaltyObject({
                 }
               }
             }
-          },
-          ...(loyaltyObject.imageModulesData || []) //  preserva otros módulos
+          }
         ];
+        console.log('[createOrUpdateLoyaltyObject] Strip image agregada:', publicUrl);
       }
-
-
     } catch (err) {
       console.error('[createOrUpdateLoyaltyObject] Error con strip image:', err.message);
-      console.log('[createOrUpdateLoyaltyObject] Continuando sin imagen de strips...');
     }
-  } else if (normalizedVariant === 'strips') {
-    console.log('[createOrUpdateLoyaltyObject] Strips deshabilitados o sin imágenes disponibles');
   }
-  // Verificar si el objeto ya existe
+
+  // Verificar si objeto existe
   const getResp = await fetch(`${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
@@ -473,15 +418,11 @@ async function createOrUpdateLoyaltyObject({
   let existed = false;
   if (getResp.ok) {
     existed = true;
-    console.log('[createOrUpdateLoyaltyObject] Objeto existe, actualizando...');
   } else if (getResp.status !== 404) {
     const txt = await getResp.text().catch(() => '');
     throw new Error(`GET loyaltyObject falló (${getResp.status}): ${txt}`);
-  } else {
-    console.log('[createOrUpdateLoyaltyObject] Objeto no existe, creando...');
   }
 
-  // Crear o actualizar el objeto
   const method = existed ? 'PUT' : 'POST';
   const targetUrl = existed 
     ? `${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`
@@ -498,22 +439,16 @@ async function createOrUpdateLoyaltyObject({
 
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '');
-    console.error('[createOrUpdateLoyaltyObject] Error:', {
-      method,
-      status: resp.status,
-      error: txt
-    });
     throw new Error(`${method} loyaltyObject falló (${resp.status}): ${txt}`);
   }
 
   const result = await resp.json();
 
-  //console.log('[createOrUpdateLoyaltyObject] ✓ Objeto guardado:', {
-  //  objectId,
-  //  existed,
-  //  variant: normalizedVariant,
-  //  hasColors: !!hexBackgroundColor
-  //});
+  console.log('[createOrUpdateLoyaltyObject] Completado:', {
+    objectId,
+    existed,
+    variant: normalizedVariant
+  });
 
   return { 
     objectId, 
@@ -522,7 +457,7 @@ async function createOrUpdateLoyaltyObject({
   };
 }
 
-/* ====================== ACTUALIZAR PUNTOS ====================== */
+/* ====================== Actualizar Puntos ====================== */
 async function updateLoyaltyPoints(cardCode, newPoints) {
   if (!issuerId) throw new Error('Falta GOOGLE_ISSUER_ID');
   const objectId = objectIdForCard(cardCode);
@@ -534,8 +469,6 @@ async function updateLoyaltyPoints(cardCode, newPoints) {
       balance: { string: String(newPoints) }
     }
   };
-
-  //console.log(`[Google Wallet API] Actualizando puntos: ${cardCode} -> ${newPoints}`);
 
   const resp = await fetch(`${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`, {
     method: 'PATCH',
@@ -551,12 +484,20 @@ async function updateLoyaltyPoints(cardCode, newPoints) {
     throw new Error(`PATCH loyaltyObject (points) falló (${resp.status}): ${txt}`);
   }
 
-  //console.log(`[Google Wallet API] ✓ Puntos actualizados`);
+  console.log('[updateLoyaltyPoints] Actualizado:', { cardCode, newPoints });
   return { ok: true, objectId, points: newPoints };
 }
 
-/* ====================== ACTUALIZAR STRIPS ====================== */
-async function updateLoyaltyStrips(cardCode, strips_collected, strips_required, reward_title) {
+/* ====================== Actualizar Strips + Imagen ====================== */
+async function updateLoyaltyStrips({
+  cardCode, 
+  businessId,
+  strips_collected, 
+  strips_required, 
+  reward_title,
+  stripImageOn,
+  stripImageOff
+}) {
   if (!issuerId) throw new Error('Falta GOOGLE_ISSUER_ID');
   const objectId = objectIdForCard(cardCode);
   const accessToken = await getAccessToken();
@@ -576,7 +517,48 @@ async function updateLoyaltyStrips(cardCode, strips_collected, strips_required, 
     textModulesData
   };
 
-  //console.log(`[Google Wallet API] Actualizando strips: ${cardCode} -> ${strips_collected}/${strips_required}`);
+  // Regenerar imagen de strips si hay buffers
+  if (stripImageOn && stripImageOff && strips_required) {
+    try {
+      const onBuf = Buffer.from(stripImageOn, 'base64');
+      const offBuf = Buffer.from(stripImageOff, 'base64');
+
+      const stripsImageBuffer = await stripsImageService.generateStripsImage({
+        collected: strips_collected || 0,
+        total: strips_required,
+        stripImageOn: onBuf,
+        stripImageOff: offBuf,
+        cardWidth: 640
+      });
+
+      const { publicUrl } = await saveBufferAsPublicPNG({
+        businessId,
+        kind: "strip",
+        buffer: stripsImageBuffer
+      });
+
+      if (publicUrl && isHttps(publicUrl)) {
+        patchBody.imageModulesData = [
+          {
+            id: "strips_progress",
+            mainImage: {
+              sourceUri: { uri: publicUrl },
+              contentDescription: {
+                defaultValue: {
+                  language: 'es',
+                  value: isComplete
+                    ? 'Colección completa'
+                    : `${strips_collected} de ${strips_required}`
+                }
+              }
+            }
+          }
+        ];
+      }
+    } catch (err) {
+      console.error('[updateLoyaltyStrips] Error con strip image:', err.message);
+    }
+  }
 
   const resp = await fetch(`${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`, {
     method: 'PATCH',
@@ -592,11 +574,40 @@ async function updateLoyaltyStrips(cardCode, strips_collected, strips_required, 
     throw new Error(`PATCH loyaltyObject (strips) falló (${resp.status}): ${txt}`);
   }
 
-  //console.log(`[Google Wallet API] ✓ Strips actualizados`);
+  console.log('[updateLoyaltyStrips] Actualizado:', {
+    cardCode,
+    collected: strips_collected,
+    required: strips_required,
+    isComplete
+  });
+
   return { ok: true, objectId, strips_collected, strips_required, isComplete };
 }
 
-/* ====================== URL "Add to Google Wallet" (JWT - LEGACY) ====================== */
+/* ====================== Reiniciar Colección (Multi-Rewards) ====================== */
+async function resetLoyaltyStrips({
+  cardCode,
+  businessId,
+  strips_required,
+  reward_title,
+  stripImageOn,
+  stripImageOff
+}) {
+  console.log('[resetLoyaltyStrips] Reiniciando colección:', cardCode);
+  
+  // Resetear a 0/required
+  return await updateLoyaltyStrips({
+    cardCode,
+    businessId,
+    strips_collected: 0,
+    strips_required,
+    reward_title,
+    stripImageOn,
+    stripImageOff
+  });
+}
+
+/* ====================== URL "Add to Google Wallet" (JWT) ====================== */
 function buildAddToGoogleWalletURL({
   cardCode,
   userName,
@@ -666,17 +677,15 @@ function buildAddToGoogleWalletURL({
   return `https://pay.google.com/gp/v/save/${encodeURIComponent(token)}`;
 }
 
-/* ====================== URL DIRECTA (sin JWT) ====================== */
+/* ====================== URL Directa ====================== */
 function getAddToWalletUrl(objectId) {
   return `https://pay.google.com/gp/v/save/${encodeURIComponent(objectId)}`;
 }
 
-/* ====================== DELETE CLASS (para scripts) ====================== */
+/* ====================== Delete Class ====================== */
 async function deleteClass(businessId, card_detail_id = null) {
   const classId = classIdForBusiness(businessId, card_detail_id);
   const accessToken = await getAccessToken();
-
-  //console.log('🗑️  Intentando borrar clase:', classId);
 
   const resp = await fetch(`${BASE_URL}/loyaltyClass/${encodeURIComponent(classId)}`, {
     method: 'DELETE',
@@ -684,14 +693,14 @@ async function deleteClass(businessId, card_detail_id = null) {
   });
 
   if (resp.ok) {
-    //console.log('✅ Clase borrada exitosamente:', classId);
+    console.log(' Clase borrada:', classId);
     return true;
   } else if (resp.status === 404) {
-    //console.log('⚠️  La clase no existe:', classId);
+    console.log('  Clase no existe:', classId);
     return false;
   } else {
     const text = await resp.text().catch(() => '');
-    //console.error('❌ Error al borrar clase:', { status: resp.status, error: text });
+    console.error(' Error al borrar clase:', { status: resp.status, error: text });
     return false;
   }
 }
@@ -704,9 +713,10 @@ module.exports = {
   // Objeto principal
   createOrUpdateLoyaltyObject,
   
-  // Actualizaciones específicas
+  // Actualizaciones
   updateLoyaltyPoints,
   updateLoyaltyStrips,
+  resetLoyaltyStrips, 
   
   // URLs
   buildAddToGoogleWalletURL,
@@ -721,6 +731,7 @@ module.exports = {
   classIdForBusiness,
   objectIdForCard,
   toHexColor,
+  generateCardDetailId, 
   
   // Constantes
   DesignVariants

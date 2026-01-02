@@ -1,5 +1,6 @@
 const userProcess = require('../processes/usersProcess');
 const userDB = require('../db/usersDB');
+const tierProcess = require('../processes/tierProcess');
 
 // Obtener todos los usuarios
 const getAllUsers = async (req, res) => {
@@ -36,9 +37,9 @@ const getOneUserByBusiness = async(req, res) => {
 
 // Crear un nuevo usuario (sin auth_token ni strip_image_url)
 const createUser = async (req, res) => {
-  const { name, email, phone, business_id, points, serial_number } = req.body;
+  const { name, email, phone, business_id, points, serial_number, reward_title, reward_description } = req.body;
   try {
-    const result = await userProcess.createUser(name, email, phone, business_id, points, serial_number);
+    const result = await userProcess.createUser(name, email, phone, business_id, points, serial_number, reward_title, reward_description);
     res.status(201).json({ message: 'Usuario creado con éxito', ...result });
   } catch (error) {
     res.status(500).json({ error: 'Error al crear el usuario', details: error.message });
@@ -150,6 +151,45 @@ const getUserByData = async (req, res) => {
   }
 };
 
+const getTierInfo = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+
+    // Validación de entrada
+    if (!userId || isNaN(userId)) {
+      console.log('[userController.getTierInfo] userId inválido:', req.params.userId);
+      return res.status(400).json({ 
+        error: 'userId inválido',
+        message: 'El parámetro userId debe ser un número válido'
+      });
+    }
+
+    console.log('[userController.getTierInfo] Request para userId:', userId);
+
+    // Llamar al process
+    const tierInfo = await tierProcess.getTierInfo(userId);
+
+    if (!tierInfo) {
+      console.log('[userController.getTierInfo] Usuario no encontrado');
+      return res.status(404).json({ 
+        error: 'Usuario no encontrado',
+        message: `No se encontró un usuario con id ${userId}`
+      });
+    }
+
+    console.log('[userController.getTierInfo] Respuesta exitosa:', tierInfo.type);
+
+    return res.json(tierInfo);
+
+  } catch (error) {
+    console.error('[userController.getTierInfo] Error:', error);
+    return res.status(500).json({
+      error: 'Error del servidor',
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getOneUser,
@@ -159,5 +199,6 @@ module.exports = {
   deleteUser,
   retryWallet, 
   getUserDataBySerial, 
-  getUserByData
+  getUserByData,
+  getTierInfo
 };

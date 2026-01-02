@@ -196,7 +196,7 @@ const updatePoints = async (req, res) => {
       });
     }
 
-    // ✅ Enviar notificación con businessId
+    // Enviar notificación con businessId
     try {
       await notificationService.sendPointsUpdateNotification(
         serial, 

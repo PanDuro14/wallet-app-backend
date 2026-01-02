@@ -59,7 +59,7 @@ const getBusinessLogo = async (req, res) => {
     if (isJPEG) contentType = 'image/jpeg';
     else if (isWebP) contentType = 'image/webp';
     
-    //console.log('[getBusinessLogo] ✓ Sirviendo logo:', {
+    //console.log('[getBusinessLogo] Sirviendo logo:', {
     //  businessId,
     //  size: buffer.length,
     //  type: contentType

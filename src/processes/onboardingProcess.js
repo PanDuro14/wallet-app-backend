@@ -1,14 +1,16 @@
 // processes/onboardingProcess.js
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken'); 
 
 const usersService      = require('../services/usersService');
 const businessService   = require('../services/businessService');
 const carddetailService = require('../services/carddetailService');
 
+
 const { 
   issueGoogleWalletLink,
   createGoogleWalletObject,
-  issueGoogleWallet
+  loadBrandAssets
 } = require('../processes/walletProcess');
 
 const pwaWalletService = require('../services/pwaWalletService');
@@ -256,10 +258,30 @@ const createUserAndIssueProcess = async ({
     });
   }
 
-  /* ====== 8. EMITIR GOOGLE WALLET ====== */
+  /* ====== 8. CARGAR STRIP IMAGES PARA GOOGLE WALLET ====== */
+  let stripImageOn = null;
+  let stripImageOff = null;
+  
+  if (finalCardType === 'strips') {
+    try {
+      const assets = await loadBrandAssets(business_id);
+      stripImageOn = assets.stripImageOn;
+      stripImageOff = assets.stripImageOff;
+      
+      console.log('[createUserAndIssue] Strip images cargados:', {
+        hasStripOn: !!stripImageOn,
+        hasStripOff: !!stripImageOff
+      });
+    } catch (assetError) {
+      console.warn('[createUserAndIssue] No se pudieron cargar strip images:', assetError.message);
+    }
+  }
+
+  /* ====== 9. EMITIR GOOGLE WALLET CON STRIPS ====== */
   let google_save_url = null;
   let googleObjectId = null;
-  
+  let googleCardDetailId = null;
+    
   try {
     console.log('[createUserAndIssue] Intentando REST API...');
     
@@ -273,29 +295,59 @@ const createUserAndIssueProcess = async ({
       points: initial_points,
       tier: tier || (finalCardType === 'points' ? 'Bronce' : undefined),
       since: since || new Date().toISOString().slice(0, 10),
+      
       strips_collected: finalCardType === 'strips' ? 0 : undefined,
       strips_required: finalCardType === 'strips' ? effectiveStripsRequired : undefined,
       reward_title: finalCardType === 'strips' ? effectiveRewardTitle : undefined,
       isComplete: false,
+      
       colors: colors || {
         background: design.background_color || biz.background_color || '#2d3436',
         foreground: design.foreground_color || biz.foreground_color || '#E6E6E6'
       },
-      barcode: barcode || { type: 'qr' }, 
+      barcode: barcode || { type: 'qr' }
     });
 
     googleObjectId = googleResult.objectId;
-    google_save_url = `https://pay.google.com/gp/v/save/${encodeURIComponent(googleObjectId)}`;
+    googleCardDetailId = googleResult.card_detail_id;
     
-    console.log('[createUserAndIssue] ✓ Google Wallet REST API exitoso');
+    // GENERAR JWT CON ORIGINS VACÍO (para links directos)
+    const { getSA } = require('../services/googleWalletService');
+    const credentials = getSA();
     
-  } catch (restApiError) {
-    console.error('[createUserAndIssue] ❌ REST API falló:', {
-      message: restApiError.message
+    const jwtPayload = {
+      iss: credentials.client_email,
+      aud: 'google',
+      origins: [], // Vacío para links directos en navegador
+      typ: 'savetowallet',
+      iat: Math.floor(Date.now() / 1000),
+      payload: {
+        loyaltyObjects: [{ id: googleObjectId }]
+      }
+    };
+    
+    const token = jwt.sign(jwtPayload, credentials.private_key, {
+      algorithm: 'RS256',
+      keyid: credentials.private_key_id
     });
     
-    // Fallback a JWT
-    console.log('[createUserAndIssue] 🔄 Intentando fallback con JWT...');
+    google_save_url = `https://pay.google.com/gp/v/save/${token}`;
+    
+    console.log('[createUserAndIssue] Google Wallet REST API exitoso:', {
+      objectId: googleObjectId,
+      card_detail_id: googleCardDetailId,
+      hasStripImages: !!(stripImageOn && stripImageOff),
+      urlType: 'jwt_with_empty_origins'
+    });
+    
+  } catch (restApiError) {
+    console.error('[createUserAndIssue] REST API falló:', {
+      message: restApiError.message,
+      stack: restApiError.stack?.split('\n')[0]
+    });
+    
+    // Fallback a JWT legacy
+    console.log('[createUserAndIssue] Intentando fallback con JWT...');
     
     try {
       google_save_url = await issueGoogleWalletLink({
@@ -318,22 +370,22 @@ const createUserAndIssueProcess = async ({
         barcode: barcode || { type: 'qr' }
       });
       
-      console.log('[createUserAndIssue] ✓ JWT fallback exitoso');
+      console.log('[createUserAndIssue] JWT fallback exitoso (sin strip images)');
       
     } catch (jwtError) {
-      console.error('[createUserAndIssue] ❌ JWT fallback también falló:', {
+      console.error('[createUserAndIssue] JWT fallback también falló:', {
         message: jwtError.message
       });
       google_save_url = null;
     }
   }
 
-  /* ====== 9. APPLE WALLET URL ====== */
+  /* ====== 10. APPLE WALLET URL ====== */
   const base = process.env.PUBLIC_BASE_URL || process.env.WALLET_BASE_URL || '';
   const typeId = process.env.PASS_TYPE_IDENTIFIER;
   const apple_pkpass_url = `${base}/api/v1/wallets/v1/passes/${encodeURIComponent(typeId)}/${serial_number}`;
 
-  /* ====== 10. GUARDAR URL DE GOOGLE WALLET ====== */
+  /* ====== 11. GUARDAR URL DE GOOGLE WALLET ====== */
   if (google_save_url) {
     try {
       await usersService.saveUserWallet({
@@ -342,15 +394,15 @@ const createUserAndIssueProcess = async ({
         wallet_url: google_save_url,
         google_object_id: googleObjectId
       });
-      console.log('[createUserAndIssue] ✓ Google Wallet URL guardada');
+      console.log('[createUserAndIssue] Google Wallet URL guardada');
     } catch (saveError) {
-      console.error('[createUserAndIssue] ⚠️ Error guardando wallet URL:', saveError.message);
+      console.error('[createUserAndIssue] Error guardando wallet URL:', saveError.message);
     }
   } else {
-    console.warn('[createUserAndIssue] ⚠️ No se pudo crear Google Wallet, solo disponible Apple Wallet');
+    console.warn('[createUserAndIssue] No se pudo crear Google Wallet, solo disponible Apple Wallet');
   }
 
-  /* ====== 11. CONSTRUIR RESPUESTA CON PWA ====== */
+  /* ====== 12. CONSTRUIR RESPUESTA CON PWA ====== */
   const pwaUrls = pwaWalletService.buildPwaUrls(serial_number);
   
   const response = {
@@ -372,6 +424,7 @@ const createUserAndIssueProcess = async ({
     wallet: {
       google_save_url: google_save_url || null,
       google_object_id: googleObjectId || null,
+      google_card_detail_id: googleCardDetailId || null, // NUEVO
       apple_pkpass_url,
       apple_auth_header: `ApplePass ${apple_auth_token}`,
       google_method: google_save_url ? (googleObjectId ? 'rest_api' : 'jwt') : null,
@@ -381,7 +434,7 @@ const createUserAndIssueProcess = async ({
     }
   };
 
-  /* ====== 12. AGREGAR INFO DE STRIPS Y MULTI-TIER ====== */
+  /* ====== 13. AGREGAR INFO DE STRIPS Y MULTI-TIER ====== */
   if (finalCardType === 'strips') {
     response.user.strips_collected = user.strips_collected || 0;
     response.user.strips_required = user.strips_required;
@@ -396,7 +449,7 @@ const createUserAndIssueProcess = async ({
       isComplete: false
     };
     
-    //  INFO DE MULTI-TIER (si aplica)
+    // INFO DE MULTI-TIER (si aplica)
     if (isMultiTier && rewardConfig) {
       response.reward_system = {
         type: 'multi-tier',
@@ -422,7 +475,7 @@ const createUserAndIssueProcess = async ({
     if (since) response.user.since = since;
   }
 
-  console.log('[createUserAndIssue] ✓ Proceso completado:', {
+  console.log('[createUserAndIssue] Proceso completado:', {
     userId: user.id,
     cardType: finalCardType,
     rewardSystemType: rewardConfig?.type || 'none',
@@ -430,7 +483,8 @@ const createUserAndIssueProcess = async ({
     currentLevel: tierInfo?.currentLevel,
     hasGoogleUrl: !!google_save_url,
     hasAppleUrl: !!apple_pkpass_url,
-    hasPwaUrl: !!pwaUrls.pwa
+    hasPwaUrl: !!pwaUrls.pwa,
+    googleCardDetailId
   });
 
   return response;
@@ -452,10 +506,41 @@ const changeUserDesignProcess = async ({ user_id, card_detail_id }) => {
     throw err;
   }
 
+  // Actualizar en BD
   await usersService.updateUser(user.id, {
     card_detail_id: design.id,
     updated_at: new Date()
   });
+
+  // ACTUALIZAR GOOGLE WALLET CON NUEVO DISEÑO
+  if (user.serial_number) {
+    try {
+      const assets = await loadBrandAssets(user.business_id);
+      const biz = await businessService.getOneBusiness(user.business_id);
+      
+      await createGoogleWalletObject({
+        cardCode: user.serial_number,
+        userName: user.name,
+        programName: biz.name || 'Loyalty Program',
+        businessId: user.business_id,
+        card_detail_id: design.id,
+        variant: user.card_type || 'points',
+        points: user.points,
+        strips_collected: user.strips_collected,
+        strips_required: user.strips_required,
+        reward_title: user.reward_title,
+        isComplete: user.reward_unlocked,
+        colors: {
+          background: design.background_color || biz.background_color || '#2d3436',
+          foreground: design.foreground_color || biz.foreground_color || '#E6E6E6'
+        }
+      });
+      
+      console.log('[changeUserDesignProcess] Google Wallet actualizado con nuevo diseño');
+    } catch (gwError) {
+      console.error('[changeUserDesignProcess] Error actualizando Google Wallet:', gwError.message);
+    }
+  }
 
   return true;
 };

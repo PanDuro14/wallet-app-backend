@@ -25,10 +25,10 @@ class StripsImageService {
       }
 
       if (!imageOnBuffer) {
-        imageOnBuffer = await this.createDefaultImage('✅', '#4CAF50');
+        imageOnBuffer = await this.createDefaultImage('', '#4CAF50');
       }
       if (!imageOffBuffer) {
-        imageOffBuffer = await this.createDefaultImage('⭕', '#CCCCCC');
+        imageOffBuffer = await this.createDefaultImage('', '#CCCCCC');
       }
 
       // ===== Tamaño externo (Wallet) =====

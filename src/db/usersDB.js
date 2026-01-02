@@ -67,6 +67,12 @@ const getOneUserByBusiness = async(id) => {
 // Crear un nuevo usuario con Promise
 // En src/services/usersService.js
 
+// services/usersService.js
+
+/**
+ * Crear nuevo usuario con soporte completo de strips y multi-tier
+ * VERSIÓN UNIFICADA - Compatible con usersDB.createUser actual
+ */
 const createUser = (userData) => {
   return new Promise(async (resolve, reject) => {
     try {
@@ -74,58 +80,57 @@ const createUser = (userData) => {
         name, email, phone, business_id, points,
         serial_number, apple_auth_token, apple_pass_type_id, 
         card_detail_id, loyalty_account_id,
-        // Campos que SÍ existen en tu DB
-        strips_collected,
-        strips_required,
-        reward_unlocked
-        // Nota: card_type y reward_title NO están en tu DB
+        card_type, design_variant,
+        strips_collected, strips_required,
+        reward_title, reward_description, reward_unlocked
       } = userData;
 
-      console.log('[usersService.createUser] Campos recibidos:', {
-        name,
-        email,
-        business_id,
-        card_detail_id,
-        strips_collected,
-        strips_required,
-        reward_unlocked
+      console.log('[createUser] Campos recibidos:', {
+        name, email, business_id, card_type,
+        strips_required, reward_title
       });
 
-      // Campos base obligatorios
+      if (!name || !email || !business_id) {
+        return reject(new Error('Campos obligatorios: name, email, business_id'));
+      }
+
+      if (!serial_number) {
+        return reject(new Error('serial_number es obligatorio'));
+      }
+
+      const effectiveCardType = card_type || design_variant || 'points';
+      
+      console.log('[createUser] card_type efectivo:', effectiveCardType);
+
       let fields = [
         'name', 'email', 'phone', 'business_id', 'points',
         'serial_number', 'apple_auth_token', 'apple_pass_type_id', 
-        'card_detail_id', 'loyalty_account_id'
+        'card_detail_id', 'loyalty_account_id', 'card_type'
       ];
       
       let values = [
-        name, 
-        email, 
-        phone, 
-        business_id, 
-        points || 0,
-        serial_number, 
-        apple_auth_token, 
-        apple_pass_type_id, 
-        card_detail_id, 
-        loyalty_account_id
+        name, email, phone, business_id, points || 0,
+        serial_number, apple_auth_token, apple_pass_type_id, 
+        card_detail_id, loyalty_account_id, effectiveCardType
       ];
 
-      // Agregar campos opcionales dinámicamente (solo los que existen en tu DB)
-      const optionalFields = [
-        { key: 'strips_collected', value: strips_collected || 0 }, // Siempre 0 al inicio
-        { key: 'strips_required', value: strips_required }, // Del request (8 en tu caso)
-        { key: 'reward_unlocked', value: reward_unlocked || false }
-      ];
+      if (effectiveCardType === 'strips') {
+        fields.push('strips_collected', 'strips_required', 'reward_title', 'reward_description', 'reward_unlocked');
+        values.push(
+          strips_collected ?? 0,
+          strips_required ?? 10,
+          reward_title || 'Recompensa',
+          reward_description || null,
+          reward_unlocked ?? false
+        );
+        
+        console.log('[createUser] Strips fields agregados:', {
+          strips_required: strips_required ?? 10,
+          reward_title: reward_title || 'Recompensa'
+        });
+      }
 
-      optionalFields.forEach(field => {
-        if (field.value !== undefined && field.value !== null) {
-          fields.push(field.key);
-          values.push(field.value);
-        }
-      });
-
-      // Construir placeholders ($1, $2, etc.)
+      // CRÍTICO: Agregar $ antes del número
       const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
       
       const query = `
@@ -134,59 +139,54 @@ const createUser = (userData) => {
         RETURNING *
       `;
 
-      console.log('[usersService.createUser] Query construido:', {
+      console.log('[createUser] Query:', {
         fieldsCount: fields.length,
         valuesCount: values.length,
-        fields: fields,
-        sampleValues: values.slice(0, 5), // Primeros 5 valores para debug
-        hasStripsData: !!(strips_required || strips_collected)
+        cardType: effectiveCardType,
+        // Debug del query completo
+        samplePlaceholders: placeholders.split(',').slice(0, 5).join(',')
       });
 
-      // Validaciones antes de ejecutar
-      if (!name || !email || !business_id) {
-        return reject(new Error('Campos obligatorios faltantes: name, email, business_id'));
-      }
-
       if (fields.length !== values.length) {
-        return reject(new Error(`Mismatch fields/values: ${fields.length} fields vs ${values.length} values`));
+        return reject(new Error(`Mismatch: ${fields.length} fields vs ${values.length} values`));
       }
 
-      // Ejecutar query con pool de conexiones
       pool.query(query, values, (error, results) => {
         if (error) {
-          console.error('[usersService.createUser] Database error:', {
+          console.error('[createUser] DB error:', {
             message: error.message,
             code: error.code,
-            detail: error.detail,
-            constraint: error.constraint
+            detail: error.detail
           });
           return reject(error);
         }
 
         if (!results.rows || results.rows.length === 0) {
-          console.error('[usersService.createUser] No rows returned');
-          return reject(new Error('No user created - no rows returned'));
+          return reject(new Error('No user created'));
         }
 
         const createdUser = results.rows[0];
         
-        console.log('[usersService.createUser] ✅ Usuario creado exitosamente:', {
+        console.log('[createUser] Usuario creado:', {
           id: createdUser.id,
-          serial_number: createdUser.serial_number,
-          strips_required: createdUser.strips_required,
-          strips_collected: createdUser.strips_collected,
-          reward_unlocked: createdUser.reward_unlocked
+          card_type: createdUser.card_type,
+          reward_title: createdUser.reward_title
         });
+
+        if (effectiveCardType === 'strips' && !createdUser.reward_title) {
+          console.warn('[createUser] Usuario strips sin reward_title');
+        }
 
         resolve(createdUser);
       });
 
     } catch (error) {
-      console.error('[usersService.createUser] Unexpected error:', error);
+      console.error('[createUser] Unexpected error:', error);
       reject(error);
     }
   });
 };
+
 
 // ========== FUNCIÓN DE UTILIDAD PARA VALIDAR STRIPS ==========
 const validateStripsData = (userData) => {
@@ -300,21 +300,47 @@ const markWalletAdded = async ({ userId }) => {
 
 
 // INSERT con columnas explícitas (recibe el objeto “full”)
+// db/usersDB.js
+
 const createUserFull = async (d) => {
   const serial = d.serial_number || uuidv4();
   const apple_pass_type_id = d.apple_pass_type_id || PASS_TYPE_IDENTIFIER;
 
   // Determinar el tipo de tarjeta
-  const card_type = d.card_type || 'points';  // Se debe agregar un valor predeterminado si no se pasa
+  const card_type = d.card_type || d.design_variant || 'points';
+  
   console.log('[createUserFull] card_type:', card_type);
+  console.log('[createUserFull] reward_title recibido:', d.reward_title); // Debug
 
   const sql = `
     INSERT INTO users
       (name, email, phone, business_id, points, serial_number,
        apple_auth_token, apple_pass_type_id, card_detail_id, loyalty_account_id, 
-       strips_collected, strips_required, reward_unlocked, updated_at, card_type)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),$14)
+       strips_collected, strips_required, reward_title, reward_description, 
+       reward_unlocked, updated_at, card_type)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),$16)
     RETURNING *`;
+
+  // Preparar parámetros según tipo de tarjeta
+  let strips_collected = 0;
+  let strips_required = null;
+  let reward_title = null;
+  let reward_description = null;
+  let reward_unlocked = false;
+
+  if (card_type === 'strips') {
+    strips_collected = d.strips_collected ?? 0;
+    strips_required = d.strips_required ?? 10;
+    reward_title = d.reward_title || 'Recompensa'; // CRÍTICO: Con fallback
+    reward_description = d.reward_description || null;
+    reward_unlocked = d.reward_unlocked ?? false;
+    
+    console.log('[createUserFull] Strips data:', {
+      strips_required,
+      reward_title, // Debe tener valor aquí
+      reward_description
+    });
+  }
 
   const params = [
     d.name,
@@ -327,24 +353,37 @@ const createUserFull = async (d) => {
     apple_pass_type_id,
     d.card_detail_id || null,
     d.loyalty_account_id || null,
-    d.strips_collected || 0,
-    d.strips_required || null, 
-    d.reward_unlocked || false,
-    d.card_type || 'points' 
+    strips_collected,        // $11
+    strips_required,         // $12
+    reward_title,            // $13  CRÍTICO
+    reward_description,      // $14
+    reward_unlocked,         // $15
+    card_type                // $16
   ];
 
-  // Guardar el tipo de tarjeta como 'strips' o 'points'
-  if (card_type === 'strips') {
-    params[10] = 0;  // strips_collected
-    params[11] = d.strips_required || 10; // strips_required
-    params[12] = d.reward_unlocked || false; // reward_unlocked
-  }
+  console.log('[createUserFull] Parámetros SQL:', {
+    param11_strips_collected: params[10],
+    param12_strips_required: params[11],
+    param13_reward_title: params[12], // Debe tener valor
+    param16_card_type: params[15]
+  });
 
-  // Ejecución de la consulta para insertar el usuario
   try {
     const { rows } = await pool.query(sql, params);
     const createdUser = rows[0];
-    console.log('[createUserFull] Usuario creado:', createdUser);
+    
+    console.log('[createUserFull] Usuario creado:', {
+      id: createdUser.id,
+      card_type: createdUser.card_type,
+      reward_title: createdUser.reward_title, // Verificar que tenga valor
+      strips_required: createdUser.strips_required
+    });
+    
+    // Validación post-creación
+    if (card_type === 'strips' && !createdUser.reward_title) {
+      console.error('[createUserFull] CRITICAL: Usuario strips creado sin reward_title!');
+    }
+    
     return createdUser;
   } catch (error) {
     console.error('[createUserFull] Database error:', error);
@@ -359,7 +398,6 @@ const updateUserFields = async (id, patch) => {
     'name','email','phone','points','apple_auth_token','apple_pass_type_id',
     'card_detail_id','loyalty_account_id','wallet_url','wallet_added','wallet_added_at',
     'serial_number','updated_at',
-    // ✅ AÑADIR: Permitir actualizar strips
     'strips_collected','strips_required','reward_unlocked'
   ]);
 
@@ -397,9 +435,9 @@ const updateUserFields = async (id, patch) => {
       SET updated_at = NOW()
       WHERE user_id = $1
     `, [id]);
-    console.log(`[updateUserFields] ✅ Actualizado apple_wallet_registrations para user ${id}`);
+    console.log(`[updateUserFields] Actualizado apple_wallet_registrations para user ${id}`);
   } catch (regError) {
-    console.error('[updateUserFields] ⚠️ Error actualizando registrations:', regError.message);
+    console.error('[updateUserFields] Error actualizando registrations:', regError.message);
     // No bloquear la operación principal
   }
 
@@ -424,7 +462,7 @@ async function bumpPointsBySerial(serial, delta) {
 const getUserDataBySerial = async (serial) => {
   return new Promise((resolve, reject) => {
     const sql = `
-      SELECT name, email, business_id, points, card_type, strips_collected, strips_required, reward_unlocked
+      SELECT id, name, email, business_id, points, card_type, strips_collected, strips_required, reward_unlocked
       FROM users WHERE serial_number = $1
     `;
     pool.query(sql, [serial], (error, results) => {
@@ -539,8 +577,57 @@ const getInactiveUsers = async (inactiveDays = 7, businessId = null) => {
   }
 };
 
+const calculateCurrentTier = (user, multiTierConfig) => {
+  const stripsCollected = user.strips_collected || 0;
+  const rewards = multiTierConfig.rewards || [];
 
+  if (!rewards.length) {
+    return {
+      currentLevel: 1,
+      totalLevels: 1,
+      stripsRequiredForCurrentTier: user.strips_required || 10,
+      currentReward: { title: 'Premio', strips_required: user.strips_required || 10 },
+      nextReward: null,
+      isLastTier: true
+    };
+  }
 
+  let currentLevel = 1;
+  let currentReward = rewards[0];
+
+  for (let i = 0; i < rewards.length; i++) {
+    if (stripsCollected >= rewards[i].strips_required) {
+      currentLevel = i + 2;
+      if (i + 1 < rewards.length) {
+        currentReward = rewards[i + 1];
+      } else {
+        currentReward = rewards[i];
+        currentLevel = i + 1;
+      }
+    } else {
+      currentReward = rewards[i];
+      currentLevel = i + 1;
+      break;
+    }
+  }
+
+  if (currentLevel > rewards.length) {
+    currentLevel = rewards.length;
+    currentReward = rewards[rewards.length - 1];
+  }
+
+  const nextReward = currentLevel < rewards.length ? rewards[currentLevel] : null;
+  const isLastTier = currentLevel === rewards.length;
+
+  return {
+    currentLevel,
+    totalLevels: rewards.length,
+    stripsRequiredForCurrentTier: currentReward.strips_required,
+    currentReward,
+    nextReward,
+    isLastTier
+  };
+};
 
 module.exports = {
   getAllUsers,
@@ -558,5 +645,6 @@ module.exports = {
   validateStripsData,
   prepareStripsData, 
   searchUsersByData, 
-  getInactiveUsers
+  getInactiveUsers,
+  calculateCurrentTier,  
 };

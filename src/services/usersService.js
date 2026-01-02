@@ -13,8 +13,8 @@ const createUser = async (...args) => {
   if (args.length === 1 && args[0] && typeof args[0] === 'object') {
     newUser = await usersDb.createUserFull(args[0]); 
   } else {
-    const [name, email, phone, business_id, points = 0, serial_number = null] = args;
-    newUser = await usersDb.createUser(name, email, phone, business_id, points, serial_number);
+    const [name, email, phone, business_id, points = 0, serial_number = null, reward_title, reward_description, ]  = args;
+    newUser = await usersDb.createUser(name, email, phone, business_id, points, serial_number, reward_title, reward_description);
   }
 
   // Enviar bienvenida automáticamente (sin bloquear la creación)
@@ -27,9 +27,9 @@ const createUser = async (...args) => {
           newUser.id,
           lang
         );
-        ////console.log(`✅ Bienvenida enviada a usuario ${newUser.id}`);
+        ////console.log(` Bienvenida enviada a usuario ${newUser.id}`);
       } catch (error) {
-        ////console.error(`❌ Error enviando bienvenida a usuario ${newUser.id}:`, error.message);
+        ////console.error(` Error enviando bienvenida a usuario ${newUser.id}:`, error.message);
         // No lanzar error para no afectar la creación
       }
     });
@@ -57,7 +57,7 @@ const updateUser = async (id, arg2, email, phone) => {
       try {
         await _handleUpdateNotifications(id, updatedUser, patchObj);
       } catch (error) {
-        ////console.error(`❌ Error enviando notificaciones para usuario ${id}:`, error.message);
+        ////console.error(` Error enviando notificaciones para usuario ${id}:`, error.message);
       }
     });
   }
@@ -71,13 +71,13 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
   const { serial_number, card_type, points, strips_collected, strips_required } = updatedUser;
 
   if (!serial_number) {
-    ////console.log(`⚠️ Usuario ${userId} no tiene serial_number, omitiendo notificaciones`);
+    ////console.log(` Usuario ${userId} no tiene serial_number, omitiendo notificaciones`);
     return;
   }
 
   // ===== CASO 1: ACTUALIZACIÓN DE PUNTOS =====
   if (patchObj.points !== undefined || patchObj.hasOwnProperty('points')) {
-    ////console.log(`📊 Detectada actualización de puntos para usuario ${userId}: ${points} puntos`);
+    ////console.log(` Detectada actualización de puntos para usuario ${userId}: ${points} puntos`);
     
     await notificationService.sendPointsUpdateNotification(
       serial_number,
@@ -86,7 +86,7 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
       lang
     );
     
-    ////console.log(`✅ Notificación de puntos enviada a usuario ${userId}`);
+    ////console.log(` Notificación de puntos enviada a usuario ${userId}`);
     return; // Solo una notificación por actualización
   }
 
@@ -95,11 +95,11 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
     const collected = strips_collected || 0;
     const required = strips_required || 10;
     
-    ////console.log(`🎫 Detectada actualización de strips para usuario ${userId}: ${collected}/${required}`);
+    ////console.log(` Detectada actualización de strips para usuario ${userId}: ${collected}/${required}`);
 
     // Verificar si completó la colección
     if (collected >= required) {
-      ////console.log(`🎉 Usuario ${userId} completó su colección!`);
+      ////console.log(` Usuario ${userId} completó su colección!`);
       
       await notificationService.sendCompletionNotification(
         serial_number,
@@ -108,7 +108,7 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
         lang
       );
       
-      ////console.log(`✅ Notificación de completación enviada a usuario ${userId}`);
+      ////console.log(` Notificación de completación enviada a usuario ${userId}`);
     } else {
       // Progreso normal
       await notificationService.sendStripsUpdateNotification(
@@ -119,7 +119,7 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
         lang
       );
       
-      ////console.log(`✅ Notificación de progreso enviada a usuario ${userId}`);
+      ////console.log(` Notificación de progreso enviada a usuario ${userId}`);
     }
     
     return;
@@ -129,7 +129,7 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
   if (patchObj.reward_unlocked === true) {
     const rewardTitle = patchObj.reward_title || updatedUser.reward_title || 'Tu premio';
     
-    ////console.log(`🎁 Premio desbloqueado para usuario ${userId}: ${rewardTitle}`);
+    ////console.log(` Premio desbloqueado para usuario ${userId}: ${rewardTitle}`);
     
     await notificationService.sendRewardReadyNotification(
       serial_number,
@@ -138,12 +138,12 @@ async function _handleUpdateNotifications(userId, updatedUser, patchObj) {
       lang
     );
     
-    ////console.log(`✅ Notificación de premio enviada a usuario ${userId}`);
+    ////console.log(` Notificación de premio enviada a usuario ${userId}`);
     return;
   }
 
   // Si no es ninguno de los casos anteriores, no enviar notificación
-  ////console.log(`ℹ️ Actualización de usuario ${userId} sin notificaciones automáticas`);
+  ////console.log(` Actualización de usuario ${userId} sin notificaciones automáticas`);
 }
 
 // ===== MÉTODOS ESPECÍFICOS PARA ACTUALIZAR CON NOTIFICACIONES EXPLÍCITAS =====
@@ -179,9 +179,9 @@ const updatePoints = async (userId, deltaPoints, lang = 'es') => {
           newPoints,
           lang
         );
-        //console.log(`✅ Notificación de puntos enviada a usuario ${userId}`);
+        //console.log(` Notificación de puntos enviada a usuario ${userId}`);
       } catch (error) {
-        //console.error(`❌ Error enviando notificación a usuario ${userId}:`, error.message);
+        //console.error(` Error enviando notificación a usuario ${userId}:`, error.message);
       }
     });
   }
@@ -223,7 +223,7 @@ const updateStrips = async (userId, deltaStrips, lang = 'es') => {
             'strips',
             lang
           );
-          //console.log(`🎉 Usuario ${userId} completó su colección (${newStrips}/${requiredStrips})`);
+          //console.log(` Usuario ${userId} completó su colección (${newStrips}/${requiredStrips})`);
         } else {
           // Progreso normal
           await notificationService.sendStripsUpdateNotification(
@@ -233,10 +233,10 @@ const updateStrips = async (userId, deltaStrips, lang = 'es') => {
             requiredStrips,
             lang
           );
-          //console.log(`✅ Progreso actualizado para usuario ${userId} (${newStrips}/${requiredStrips})`);
+          //console.log(` Progreso actualizado para usuario ${userId} (${newStrips}/${requiredStrips})`);
         }
       } catch (error) {
-        //console.error(`❌ Error enviando notificación a usuario ${userId}:`, error.message);
+        //console.error(` Error enviando notificación a usuario ${userId}:`, error.message);
       }
     });
   }
@@ -296,48 +296,90 @@ const getUserDataBySerial = async ({ serial }) => {
 };
 
 // Calcular en qué nivel de premio está el usuario (multi-tier)
+// services/usersService.js
+
+/**
+ * Calcula en qué tier está el usuario basándose en strips_collected absoluto
+ * y strips_required actual del usuario
+ */
 const calculateCurrentTier = (user, multiTierConfig) => {
   if (!multiTierConfig || !multiTierConfig.rewards) {
     return null;
   }
   
   const totalCollected = user.strips_collected || 0;
-  let accumulatedStrips = 0;
+  const currentRewardTitle = user.reward_title;  
+  const rewards = multiTierConfig.rewards;
   
-  for (let i = 0; i < multiTierConfig.rewards.length; i++) {
-    const reward = multiTierConfig.rewards[i];
-    accumulatedStrips += reward.strips_required;
-    
-    if (totalCollected < accumulatedStrips) {
-      // Usuario está en este nivel
-      const stripsInCurrentTier = totalCollected - (accumulatedStrips - reward.strips_required);
-      
-      return {
-        currentLevel: i + 1,
-        totalLevels: multiTierConfig.rewards.length,
-        currentReward: reward,
-        stripsInCurrentTier,
-        stripsRequiredForCurrentTier: reward.strips_required,
-        progressPercent: Math.floor((stripsInCurrentTier / reward.strips_required) * 100),
-        isComplete: false,
-        nextReward: multiTierConfig.rewards[i + 1] || null
-      };
+  console.log('[calculateCurrentTier] Input:', {
+    strips_collected: totalCollected,
+    reward_title: currentRewardTitle,
+    rewards_count: rewards.length
+  });
+  
+  let currentLevel = 1;
+  let currentReward = rewards[0];
+  let nextReward = rewards[1] || null;
+  
+  // Buscar qué tier tiene el mismo reward_title que el usuario
+  for (let i = 0; i < rewards.length; i++) {
+    if (rewards[i].title === currentRewardTitle) {
+      currentLevel = i + 1;
+      currentReward = rewards[i];
+      nextReward = rewards[i + 1] || null;
+      break;
     }
   }
   
-  // Usuario completó todos los niveles
-  const lastReward = multiTierConfig.rewards[multiTierConfig.rewards.length - 1];
-  return {
-    currentLevel: multiTierConfig.rewards.length,
-    totalLevels: multiTierConfig.rewards.length,
-    currentReward: lastReward,
-    stripsInCurrentTier: lastReward.strips_required,
-    stripsRequiredForCurrentTier: lastReward.strips_required,
-    progressPercent: 100,
-    isComplete: true,
-    nextReward: null
+  // Si no se encontró, asumir tier 1
+  if (!currentRewardTitle || currentLevel === 1 && rewards[0].title !== currentRewardTitle) {
+    console.warn('[calculateCurrentTier] reward_title no encontrado en config, usando tier 1');
+  }
+  
+  // Calcular progreso dentro del tier actual
+  const progressPercent = currentReward.strips_required > 0 
+    ? Math.floor((totalCollected / currentReward.strips_required) * 100)
+    : 0;
+  
+  const isComplete = totalCollected >= currentReward.strips_required;
+  const isLastTier = currentLevel === rewards.length;
+  
+  const result = {
+    currentLevel,
+    totalLevels: rewards.length,
+    currentReward,
+    stripsInCurrentTier: totalCollected,
+    stripsRequiredForCurrentTier: currentReward.strips_required,
+    progressPercent,
+    isComplete,
+    isLastTier,
+    nextReward
   };
+  
+  console.log('[calculateCurrentTier] Result:', {
+    currentLevel: result.currentLevel,
+    totalLevels: result.totalLevels,
+    currentReward: result.currentReward.title,
+    nextReward: result.nextReward?.title,
+    isLastTier: result.isLastTier
+  });
+  
+  return result;
 };
+
+
+// obtener usuario con el id y el post procesado de tiers 
+const getUserById = async (id) => {
+  try {
+    return await usersDb.getOneUser(id);
+  } catch (error) {
+    console.error('[usersService.getUserById] Error:', error);
+    throw error;
+  }
+};
+
+// Re-exportar calculateCurrentTier desde usersDb
+const calculateCurrentTierFromDb = usersDb.calculateCurrentTier;
 
 module.exports = {
   // Métodos originales (ahora con notificaciones automáticas)
@@ -358,5 +400,7 @@ module.exports = {
   getInactiveUsers,     // Para cron jobs de recordatorios masivos
 
   // Calcular current tier xd
-  calculateCurrentTier
+  calculateCurrentTier,
+  getUserById,
+  calculateCurrentTierFromDb
 };

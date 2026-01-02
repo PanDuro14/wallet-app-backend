@@ -1,5 +1,5 @@
 /**
- * 🧪 VERIFICADOR DE PAYLOAD - Ejecutar en Console del Servidor
+ * VERIFICADOR DE PAYLOAD - Ejecutar en Console del Servidor
  * 
  * Este script simula el envío de una notificación y muestra
  * exactamente qué payload se está enviando
@@ -12,7 +12,7 @@ function getNotificationMessage(type, data = {}, lang = 'es') {
   const templates = {
     es: {
       update_strips: {
-        title: '¡Progreso actualizado! 🎫',
+        title: '¡Progreso actualizado! ',
         body: 'Llevas {collected} de {required}. ¡Ya casi completas!'
       }
     }
@@ -32,7 +32,7 @@ function getNotificationMessage(type, data = {}, lang = 'es') {
 }
 
 // Test del payload
-console.log('🧪 VERIFICANDO FORMATO DE PAYLOAD\n');
+console.log(' VERIFICANDO FORMATO DE PAYLOAD\n');
 
 const type = 'update';
 const data = {
@@ -44,7 +44,7 @@ const lang = 'es';
 const userId = 123;
 
 const message = getNotificationMessage(type, data, lang);
-console.log('1️⃣ Mensaje generado:');
+console.log('1 Mensaje generado:');
 console.log(JSON.stringify(message, null, 2));
 console.log('\n');
 
@@ -67,7 +67,7 @@ const payloadCorrecto = {
   }
 };
 
-console.log('2️⃣ Payload CORRECTO (con wrapper notification):');
+console.log('2 Payload CORRECTO (con wrapper notification):');
 console.log(JSON.stringify(payloadCorrecto, null, 2));
 console.log('\n');
 
@@ -83,23 +83,23 @@ const payloadIncorrecto = {
   }
 };
 
-console.log('3️⃣ Payload INCORRECTO (sin wrapper notification):');
+console.log('3 Payload INCORRECTO (sin wrapper notification):');
 console.log(JSON.stringify(payloadIncorrecto, null, 2));
 console.log('\n');
 
-console.log('📊 COMPARACIÓN:');
+console.log(' COMPARACIÓN:');
 console.log('');
-console.log('✅ CORRECTO:');
+console.log(' CORRECTO:');
 console.log('   { notification: { title, body, ... } }');
 console.log('   └─ El Service Worker encuentra los datos en "notification"');
 console.log('');
-console.log('❌ INCORRECTO:');
+console.log(' INCORRECTO:');
 console.log('   { title, body, ... }');
 console.log('   └─ El Service Worker NO encuentra los datos (vacío)');
 console.log('');
 
 // Simular lo que recibirá el Service Worker
-console.log('4️⃣ Lo que recibe el Service Worker:');
+console.log('4 Lo que recibe el Service Worker:');
 console.log('');
 console.log('Con payload CORRECTO:');
 console.log('  event.data.json() =', JSON.stringify(payloadCorrecto));
@@ -112,7 +112,7 @@ console.log('  event.data.json().notification =', payloadIncorrecto.notification
 console.log('  event.data.json().notification?.title =', payloadIncorrecto.notification?.title); // undefined!
 console.log('');
 
-console.log('🎯 CONCLUSIÓN:');
+console.log(' CONCLUSIÓN:');
 console.log('');
 console.log('El Service Worker espera:');
 console.log('  payload.notification.title');

@@ -32,7 +32,7 @@ const getCardDetails = async (serialNumber) => {
   // 2. Formatear respuesta
   const formattedCard = pwaWalletService.formatCardResponse(rawCard);
   
-  console.log('[PWA Wallet Process] ✓ Tarjeta formateada exitosamente');
+  console.log('[PWA Wallet Process] Tarjeta formateada exitosamente');
   
   return formattedCard;
 };
@@ -90,7 +90,7 @@ const addStamp = async (serialNumber, adminKey = null) => {
     newState.reward_unlocked
   );
   
-  console.log('[PWA Wallet Process] ✓ Sello agregado:', {
+  console.log('[PWA Wallet Process] Sello agregado:', {
     strips_collected: updatedCard.strips_collected,
     is_complete: updatedCard.reward_unlocked
   });
@@ -139,7 +139,7 @@ const redeemReward = async (serialNumber, adminKey = null) => {
     throw error;
   }
   
-  console.log('[PWA Wallet Process] ✓ Recompensa canjeada, colección reiniciada');
+  console.log('[PWA Wallet Process] Recompensa canjeada, colección reiniciada');
   
   // 4. Registrar transacción (opcional)
   try {
@@ -332,7 +332,7 @@ const updateCardPoints = async (serial, delta) => {
  */
 const resetCardStrips = async (serial, redeemed = false) => {
   try {
-    // ✅ Obtener datos actuales
+    // Obtener datos actuales
     const card = await pwaWalletDb.getUserBySerial(serial);
     
     if (!card) {
@@ -344,7 +344,7 @@ const resetCardStrips = async (serial, redeemed = false) => {
       await pwaWalletDb.incrementRedemptions(serial);
     }
 
-    // ✅ Usar la función correcta de DB
+    // Usar la función correcta de DB
     // resetUserStrips requiere id y valida reward_unlocked
     // Para admin necesitamos resetear sin validación
     const reset = await pwaWalletDb.resetCardStrips(serial);

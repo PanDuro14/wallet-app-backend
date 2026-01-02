@@ -1,6 +1,7 @@
 
 const userService = require('../services/usersService');
-const { issueGoogleWalletLink } = require('./walletProcess'); // asegúrate de la ruta real
+const { issueGoogleWalletLink } = require('./walletProcess'); 
+const carddetailService = require('../services/carddetailService');
 
 function buildCardCode({ business_id, serial_number, id }) {
   const short = (serial_number || '').toString().split('-')[0];
@@ -17,9 +18,9 @@ const getOneUser = async (id) => {
 
 const getOneUserByBusiness = async(id) => userService.getOneUserByBusiness(id); // cambié el estilo para ahorrar tiempo 
 
-const createUser = async (name, email, phone, business_id, points = 0, serial_number = null) => {
+const createUser = async (name, email, phone, business_id, points = 0, serial_number = null, reward_title, reward_description) => {
   // 1) crear usuario
-  const newUser = await userService.createUser(name, email, phone, business_id, points, serial_number);
+  const newUser = await userService.createUser(name, email, phone, business_id, points, serial_number, reward_title, reward_description);
 
   // 2) generar cardCode
   const cardCode = buildCardCode({
@@ -91,7 +92,6 @@ const getUserDataBySerial = async ({ serial }) => {
     throw new Error('Error en el proceso de obtención de usuario: ' + error.message);
   }
 };
-
 
 module.exports = {
   getAllUsers,

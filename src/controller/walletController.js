@@ -1,9 +1,10 @@
-// controller/walletController.js
+// controllers/walletController.js
 const { 
   issueGoogleWalletLink, 
   createGoogleWalletObject,
   issueGoogleWallet,
-  issueAppleWalletPkpass 
+  issueAppleWalletPkpass,
+  loadBrandAssets
 } = require('../processes/walletProcess');
 
 const { 
@@ -11,6 +12,7 @@ const {
   ensureLoyaltyClass,
   updateLoyaltyPoints,
   updateLoyaltyStrips,
+  resetLoyaltyStrips, // NUEVO
   getAddToWalletUrl
 } = require('../services/googleWalletService');
 
@@ -20,7 +22,6 @@ const WALLET_ENABLED = (process.env.WALLET_ENABLED === 'true');
 
 /**
  * Crear tarjeta Google Wallet - Método Legacy (JWT)
- * Mantiene compatibilidad con código existente
  */
 async function createGoogle(req, res) {
   if (!WALLET_ENABLED) {
@@ -38,7 +39,6 @@ async function createGoogle(req, res) {
       colors,
       barcode,
       fields,
-      // Nuevos parámetros opcionales
       variant,
       tier,
       since,
@@ -55,16 +55,6 @@ async function createGoogle(req, res) {
       });
     }
 
-    ////console.log('[createGoogle] Request:', {
-    //  cardCode,
-    //  businessId,
-    //  variant,
-    //  points,
-    //  strips_collected,
-    //  strips_required
-    //});
-
-    // Usa el process (trae brand del negocio) - ahora con soporte de variantes
     const url = await issueGoogleWalletLink({
       cardCode,
       userName,
@@ -89,7 +79,7 @@ async function createGoogle(req, res) {
       variant: variant || 'points'
     });
   } catch (e) {
-    ////console.error('[Google Wallet] create error:', e);
+    console.error('[Google Wallet] create error:', e);
     return res.status(500).json({ 
       error: 'No se pudo generar el enlace',
       details: e.message 
@@ -99,7 +89,6 @@ async function createGoogle(req, res) {
 
 /**
  * Crear tarjeta Google Wallet - Método REST API (Recomendado)
- * Crea/actualiza objetos directamente en Google Wallet
  */
 async function createGoogleRestApi(req, res) {
   if (!WALLET_ENABLED) {
@@ -117,12 +106,10 @@ async function createGoogleRestApi(req, res) {
       colors,
       barcode,
       modules,
-      // Parámetros de negocio
       points,
       variant,
       tier,
       since,
-      // Parámetros de strips
       strips_collected,
       strips_required,
       reward_title,
@@ -135,16 +122,6 @@ async function createGoogleRestApi(req, res) {
       });
     }
 
-    ////console.log('[createGoogleRestApi] Request:', {
-    //  cardCode,
-    //  businessId,
-    //  variant,
-    //  points,
-    //  strips_collected,
-    //  strips_required
-    //});
-
-    // Crear/actualizar objeto usando REST API
     const result = await createGoogleWalletObject({
       cardCode,
       userName,
@@ -163,13 +140,13 @@ async function createGoogleRestApi(req, res) {
       isComplete
     });
 
-    // Construir URL directa al objeto
     const url = getAddToWalletUrl(result.objectId);
 
     return res.json({
       success: true,
       url,
       objectId: result.objectId,
+      card_detail_id: result.card_detail_id, // INCLUIR
       existed: result.existed,
       method: 'rest_api',
       cardCode,
@@ -179,7 +156,7 @@ async function createGoogleRestApi(req, res) {
         : 'Objeto creado exitosamente'
     });
   } catch (e) {
-    //console.error('[Google Wallet REST] create error:', e);
+    console.error('[Google Wallet REST] create error:', e);
     return res.status(500).json({
       error: 'No se pudo crear/actualizar el objeto',
       details: e.message
@@ -189,7 +166,6 @@ async function createGoogleRestApi(req, res) {
 
 /**
  * Crear tarjeta Google Wallet - Método Unificado (Auto-selección)
- * Detecta automáticamente el mejor método según los parámetros
  */
 async function createGoogleUnified(req, res) {
   if (!WALLET_ENABLED) {
@@ -208,13 +184,11 @@ async function createGoogleUnified(req, res) {
       barcode,
       modules,
       fields,
-      useRestApi, // Flag para forzar método (default: true)
-      // Parámetros de negocio
+      useRestApi,
       points,
       variant,
       tier,
       since,
-      // Parámetros de strips
       strips_collected,
       strips_required,
       reward_title,
@@ -227,14 +201,6 @@ async function createGoogleUnified(req, res) {
       });
     }
 
-    //console.log('[createGoogleUnified] Request:', {
-    //  cardCode,
-    //  businessId,
-    //  variant,
-    //  useRestApi: useRestApi !== false
-    //});
-
-    // Usar wrapper unificado
     const result = await issueGoogleWallet({
       cardCode,
       userName,
@@ -242,8 +208,8 @@ async function createGoogleUnified(req, res) {
       businessId,
       colors,
       barcode,
-      modules: modules || fields, // Acepta ambos formatos
-      useRestApi: useRestApi !== false, // Default: REST API
+      modules: modules || fields,
+      useRestApi: useRestApi !== false,
       points,
       variant,
       tier,
@@ -261,7 +227,7 @@ async function createGoogleUnified(req, res) {
       variant: variant || 'points'
     });
   } catch (e) {
-    //console.error('[Google Wallet Unified] create error:', e);
+    console.error('[Google Wallet Unified] create error:', e);
     return res.status(500).json({
       error: 'No se pudo crear la tarjeta',
       details: e.message
@@ -295,8 +261,6 @@ async function updateGooglePoints(req, res) {
       });
     }
 
-    //console.log('[updateGooglePoints] Actualizando:', { cardCode, newPoints });
-
     const result = await updateLoyaltyPoints(cardCode, newPoints);
 
     return res.json({
@@ -305,7 +269,7 @@ async function updateGooglePoints(req, res) {
       message: 'Puntos actualizados exitosamente'
     });
   } catch (e) {
-    //console.error('[Google Wallet] update points error:', e);
+    console.error('[Google Wallet] update points error:', e);
     return res.status(500).json({
       error: 'No se pudieron actualizar los puntos',
       details: e.message
@@ -326,6 +290,7 @@ async function updateGoogleStrips(req, res) {
   try {
     const { 
       cardCode, 
+      businessId, // AGREGADO para cargar assets
       strips_collected, 
       strips_required, 
       reward_title 
@@ -334,6 +299,12 @@ async function updateGoogleStrips(req, res) {
     if (!cardCode || strips_collected == null || strips_required == null) {
       return res.status(400).json({ 
         error: 'cardCode, strips_collected y strips_required requeridos' 
+      });
+    }
+
+    if (!businessId) {
+      return res.status(400).json({ 
+        error: 'businessId requerido para actualizar strips con imagen' 
       });
     }
 
@@ -346,18 +317,18 @@ async function updateGoogleStrips(req, res) {
       });
     }
 
-    //console.log('[updateGoogleStrips] Actualizando:', { 
-    //  cardCode, 
-    //  collected, 
-    //  required 
-    //});
+    // Cargar assets de strips
+    const { stripImageOn, stripImageOff } = await loadBrandAssets(businessId);
 
-    const result = await updateLoyaltyStrips(
+    const result = await updateLoyaltyStrips({
       cardCode, 
-      collected, 
-      required, 
-      reward_title
-    );
+      businessId,
+      strips_collected: collected, 
+      strips_required: required, 
+      reward_title,
+      stripImageOn,
+      stripImageOff
+    });
 
     return res.json({
       success: true,
@@ -367,9 +338,59 @@ async function updateGoogleStrips(req, res) {
         : 'Strips actualizados exitosamente'
     });
   } catch (e) {
-    //console.error('[Google Wallet] update strips error:', e);
+    console.error('[Google Wallet] update strips error:', e);
     return res.status(500).json({
       error: 'No se pudieron actualizar los strips',
+      details: e.message
+    });
+  }
+}
+
+/**
+ * NUEVO: Resetear colección de strips (multi-rewards)
+ */
+async function resetGoogleStrips(req, res) {
+  if (!WALLET_ENABLED) {
+    return res.status(501).json({ 
+      error: 'Wallet deshabilitado (WALLET_ENABLED=false)' 
+    });
+  }
+
+  try {
+    const { 
+      cardCode, 
+      businessId,
+      strips_required, 
+      reward_title 
+    } = req.body || {};
+
+    if (!cardCode || !businessId || !strips_required) {
+      return res.status(400).json({ 
+        error: 'cardCode, businessId y strips_required requeridos' 
+      });
+    }
+
+    // Cargar assets de strips
+    const { stripImageOn, stripImageOff } = await loadBrandAssets(businessId);
+
+    const result = await resetLoyaltyStrips({
+      cardCode,
+      businessId,
+      strips_required: parseInt(strips_required, 10),
+      reward_title,
+      stripImageOn,
+      stripImageOff
+    });
+
+    return res.json({
+      success: true,
+      ...result,
+      message: 'Colección reseteada exitosamente'
+    });
+  } catch (e) {
+    console.error('[Google Wallet] reset strips error:', e);
+    return res.status(500).json({
+      error: 'No se pudo resetear la colección',
       details: e.message
     });
   }
@@ -383,7 +404,8 @@ async function ensureGoogleClass(req, res) {
     const { 
       businessId, 
       programName, 
-      bg, 
+      hexBackgroundColor,
+      hexForegroundColor,
       logoUri 
     } = req.body || {};
 
@@ -393,20 +415,26 @@ async function ensureGoogleClass(req, res) {
       });
     }
 
-    const classId = await ensureLoyaltyClass({
+    const result = await ensureLoyaltyClass({
       businessId,
       programName: programName || 'Mi Programa',
-      hexBackgroundColor: bg || '#FFFFFF',
-      logoUri
+      hexBackgroundColor: hexBackgroundColor || '#FFFFFF',
+      hexForegroundColor,
+      logoUri,
+      autoGenerateId: true // Auto-generar ID
     });
 
     res.json({ 
       success: true, 
-      classId,
-      message: 'Clase asegurada exitosamente'
+      classId: result.classId,
+      card_detail_id: result.card_detail_id,
+      existed: result.existed,
+      message: result.existed 
+        ? 'Clase existente (reutilizada)' 
+        : 'Clase creada exitosamente'
     });
   } catch (e) {
-    //console.error('[Google Wallet] ensure class error:', e);
+    console.error('[Google Wallet] ensure class error:', e);
     res.status(500).json({ 
       success: false, 
       error: e.message 
@@ -415,8 +443,7 @@ async function ensureGoogleClass(req, res) {
 }
 
 /**
- * Debug: inspección del JWT (sin pasar por process)
- * SOLO DESARROLLO
+ * Debug: inspección del JWT (SOLO DESARROLLO)
  */
 async function debugGoogle(req, res) {
   try {
@@ -460,10 +487,67 @@ async function debugGoogle(req, res) {
       loyaltyObject: payload.payload?.loyaltyObjects?.[0]
     });
   } catch (e) {
-    //console.error('[Google Wallet] debug error:', e);
+    console.error('[Google Wallet] debug error:', e);
     return res.status(500).json({ 
       error: e.message 
     });
+  }
+}
+
+/**
+ * Debug: inspección de objeto en Google Wallet (SOLO DESARROLLO)
+ */
+async function debugGoogleObject(req, res) {
+  try {
+    const { objectId } = req.body || {};
+    
+    if (!objectId) {
+      return res.status(400).json({ 
+        error: 'objectId requerido' 
+      });
+    }
+
+    const { getAccessToken } = require('../services/googleWalletService');
+    const accessToken = await getAccessToken();
+    const BASE_URL = 'https://walletobjects.googleapis.com/walletobjects/v1';
+    
+    // GET objeto
+    const objResp = await fetch(`${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    
+    if (!objResp.ok) {
+      const txt = await objResp.text().catch(() => '');
+      return res.status(objResp.status).json({ 
+        error: 'Objeto no encontrado',
+        details: txt
+      });
+    }
+    
+    const object = await objResp.json();
+    
+    // GET clase
+    const classResp = await fetch(`${BASE_URL}/loyaltyClass/${encodeURIComponent(object.classId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    
+    const classObj = classResp.ok ? await classResp.json() : null;
+    
+    return res.json({ 
+      object, 
+      class: classObj,
+      summary: {
+        objectId: object.id,
+        classId: object.classId,
+        state: object.state,
+        accountName: object.accountName,
+        points: object.loyaltyPoints?.balance?.string,
+        hasImage: !!object.imageModulesData?.length
+      }
+    });
+  } catch (error) {
+    console.error('[Google Wallet] debug object error:', error);
+    return res.status(500).json({ error: error.message });
   }
 }
 
@@ -471,7 +555,6 @@ async function debugGoogle(req, res) {
 
 /**
  * Crear .pkpass para Apple Wallet
- * Sin cambios en funcionalidad, mantiene compatibilidad total
  */
 async function addToAppleWallet(req, res) {
   if (!WALLET_ENABLED) {
@@ -490,7 +573,6 @@ async function addToAppleWallet(req, res) {
       fields, 
       barcode, 
       points,
-      // Nuevos parámetros opcionales (Apple también los soporta)
       variant,
       tier,
       since,
@@ -506,14 +588,6 @@ async function addToAppleWallet(req, res) {
       });
     }
 
-    //console.log('[addToAppleWallet] Request:', {
-    //  cardCode,
-    //  businessId,
-    //  variant,
-    //  points,
-    //  strips_collected
-    //});
-
     const pkpassBuffer = await issueAppleWalletPkpass({
       cardCode,
       userName,
@@ -523,7 +597,6 @@ async function addToAppleWallet(req, res) {
       fields,
       barcode,
       points,
-      // Pasar parámetros nuevos
       variant,
       tier,
       since,
@@ -540,7 +613,7 @@ async function addToAppleWallet(req, res) {
 
     return res.send(pkpassBuffer);
   } catch (e) {
-    //console.error('[Apple Wallet] create error:', e?.message || e);
+    console.error('[Apple Wallet] create error:', e?.message || e);
     return res.status(500).json({ 
       error: 'No se pudo generar el .pkpass',
       details: e.message 
@@ -548,51 +621,21 @@ async function addToAppleWallet(req, res) {
   }
 }
 
-
-// funcion de debug 
-// En walletController.js
-const debugGoogleObject = async (req, res) => {
-  try {
-    const { getAccessToken } = require('../services/googleWalletService');
-    const objectId = '3388000000022968363.b86e60a1-995e-41c5-af17-25eec10b0d28';
-    
-    const accessToken = await getAccessToken();
-    const BASE_URL = 'https://walletobjects.googleapis.com/walletobjects/v1';
-    
-    // GET objeto
-    const objResp = await fetch(`${BASE_URL}/loyaltyObject/${encodeURIComponent(objectId)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const object = await objResp.json();
-    
-    // GET clase
-    const classResp = await fetch(`${BASE_URL}/loyaltyClass/${encodeURIComponent(object.classId)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const classObj = await classResp.json();
-    
-    return res.json({ object, classObj });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
-};
-
 /* ====================== EXPORTS ====================== */
 module.exports = {
-  // Google Wallet - Múltiples métodos
-  createGoogle,              // Legacy JWT (retrocompatibilidad)
+  // Google Wallet
+  createGoogle,              // Legacy JWT
   createGoogleRestApi,       // REST API directo
   createGoogleUnified,       // Auto-selección (recomendado)
   updateGooglePoints,        // Actualizar puntos
-  updateGoogleStrips,        // Actualizar strips
+  updateGoogleStrips,        // Actualizar strips + imagen
+  resetGoogleStrips,         // Resetear colección
   ensureGoogleClass,         // Asegurar clase
   debugGoogle,               // Debug JWT
+  debugGoogleObject,         // Debug objeto
   
   // Apple Wallet
-  addToAppleWallet,         // Sin cambios
-
-  // debug 
-  debugGoogleObject
+  addToAppleWallet
 };
 
 /* ====================== EJEMPLOS DE USO EN RUTAS ====================== 

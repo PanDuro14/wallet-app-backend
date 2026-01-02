@@ -16,10 +16,10 @@ const ready = new Promise((res, rej) => { resolveReady = res; rejectReady = rej;
       await remote.query('SELECT NOW()');
     }
     driver = remote;
-    console.log(' DB: remota OK');
+    console.log('Conexión con la db remota exitosa: Notifications');
     resolveReady(true);
   } catch (e1) {
-    console.warn(' DB remota falló:', e1.message);
+    console.warn('Error con la db remota. Intentando conexión local... ', e1.message);
     try {
       if (typeof local.connect === 'function') {
         await local.connect();
@@ -27,10 +27,10 @@ const ready = new Promise((res, rej) => { resolveReady = res; rejectReady = rej;
         await local.query('SELECT NOW()');
       }
       driver = local;
-      console.log(' DB: local OK');
+      console.log('Conexión con la db local exitosa: Notifications');
       resolveReady(true);
     } catch (e2) {
-      console.error(' DB sin conexión:', e2.message);
+      console.error(' DB sin conexión: Notifications', e2.message);
       rejectReady(e2);
     }
   }

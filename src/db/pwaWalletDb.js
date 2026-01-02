@@ -242,7 +242,7 @@ const createTransaction = async ({ userId, type, amount, description }) => {
 };
 
 /**
- * ✅ CORREGIDO: Busca una tarjeta por serial en tabla USERS
+ * CORREGIDO: Busca una tarjeta por serial en tabla USERS
  * Usado para verificaciones rápidas
  */
 const findCardBySerial = async (serial) => {
@@ -290,7 +290,7 @@ const getBusinessPin = async (businessId) => {
 };
 
 /**
- * ✅ CORREGIDO: Actualiza puntos en tabla USERS por serial
+ * CORREGIDO: Actualiza puntos en tabla USERS por serial
  * @param {string} serial - Serial number (UUID)
  * @param {number} newPoints - Nuevos puntos totales
  * @returns {Promise<boolean>}
@@ -315,7 +315,7 @@ const updateCardPoints = async (serial, newPoints) => {
 };
 
 /**
- * ✅ CORREGIDO: Resetea strips en tabla USERS por serial
+ * CORREGIDO: Resetea strips en tabla USERS por serial
  * @param {string} serial - Serial number (UUID)
  * @returns {Promise<boolean>}
  */
@@ -340,7 +340,7 @@ const resetCardStrips = async (serial) => {
 };
 
 /**
- * ✅ CORREGIDO: Incrementa contador de canjes en tabla USERS
+ * CORREGIDO: Incrementa contador de canjes en tabla USERS
  * Verifica primero si la columna existe para evitar errores
  */
 const incrementRedemptions = async (serial) => {
@@ -362,7 +362,7 @@ const incrementRedemptions = async (serial) => {
          WHERE serial_number = $1`,
         [serial]
       );
-      console.log('[incrementRedemptions] ✓ Contador incrementado');
+      console.log('[incrementRedemptions] Contador incrementado');
     } else {
       console.warn('[incrementRedemptions] Columna total_redemptions no existe, skipping...');
     }
